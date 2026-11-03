@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {WebSocketServer} from 'ws';
-import {CFG, validateConfig} from './src/config.js';
-import {makeData, makeAccounts, describeError} from './src/exchange.js';
+import {CFG, validateConfig, binanceProblem} from './src/config.js';
+import {makeData, makeAccounts, describeError, setServerIp} from './src/exchange.js';
 import {Market} from './src/market.js';
 import {News} from './src/news.js';
 import {Office} from './src/office.js';
@@ -17,7 +17,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const errs = validateConfig();
 if (errs.length){ console.error('Офис не запущен:\n - ' + errs.join('\n - ')); process.exit(1); }
 if (!CFG.password) console.warn('[!] ACCESS_PASSWORD не задан — интерфейс открыт всем, кто знает адрес (допустимо только для виртуального счёта на своём компьютере).');
+// настройка Binance при запуске: только имена переменных и длины, без самих значений
+{
+  const b = CFG.binance, has = v => v ? `задан (${v.length} симв.)` : 'НЕ ЗАДАН';
+  const near = Object.keys(process.env).filter(k => /binance|bybit|exchange|api_?key|api_?secret|secret_?key|password/i.test(k)).sort();
+  console.log(`[binance] BINANCE_ENV=${process.env.BINANCE_ENV ? b.env : `не задан (по умолчанию ${b.env})`}; BINANCE_API_KEY ${has(b.key)}; BINANCE_API_SECRET ${has(b.secret)}; ACCESS_PASSWORD ${!CFG.password ? 'НЕ ЗАДАН' : CFG.password.length < 10 ? 'короче 10 симв.' : 'задан'}; переменные с похожими именами: ${near.join(', ') || 'нет'}`);
+  const problem = binanceProblem();
+  console.log(problem ? `[binance] счёт не подключён: ${problem}` : '[binance] настройки в порядке, подключаюсь');
+}
 
+// внешний IP сервера — его нужно добавить в белый список ключа Binance, если список включён
+let serverIp = '';
+fetch('https://api.ipify.org?format=json', {signal: AbortSignal.timeout(6000)}).then(r => r.json()).then(j => { serverIp = j.ip || ''; setServerIp(serverIp); console.log('IP сервера:', serverIp); }).catch(() => {});
 const data = makeData(CFG);
 const market = new Market(data, CFG);
 const accounts = makeAccounts(CFG, data);
@@ -41,6 +52,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === '/logout') return send(res, 303, '', {Location: '/', 'Set-Cookie': clearCookie});
+  if (url.pathname === '/api/diag'){
+    if (!isAuthed(req)) return send(res, 401, 'Нужен вход');
+    const b = CFG.binance, mask = v => v ? `задан, ${v.length} символов, начинается на ${v.slice(0, 4)}…` : 'не задан';
+    const d = {time: new Date().toISOString(), node: process.version, serverIp: serverIp || 'не определён', quotes: CFG.quotes, marketType: CFG.marketType, market: market.status,
+      binance: {env: b.env, key: mask(b.key), secret: b.secret ? `задан, ${b.secret.length} символов` : 'не задан', maxOrderUsd: b.maxOrderUsd},
+      accounts: Object.values(accounts).map(a => ({id: a.id, label: a.label, configured: a.configured, ready: a.ready, error: a.error || '', raw: a.rawError || '', hedge: a.broker ? !!a.broker.hedge : null,
+        timeOffsetMs: a.broker && a.broker.ex && a.broker.ex.options ? a.broker.ex.options.timeDifference ?? null : null, balance: a.broker ? a.broker.lastBalance || null : null})),
+      active: office ? office.state.active : null};
+    return send(res, 200, JSON.stringify(d, null, 2), {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'});
+  }
   if (!isAuthed(req)) return send(res, 200, loginPage(), {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'});
   let p = url.pathname === '/' ? '/index.html' : url.pathname;
   const file = path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[\/\\])+/, ''));
@@ -59,7 +80,7 @@ function sendTo(ws, msg){ if (ws.readyState === 1 && ws.bufferedAmount < 2e6) ws
 function broadcast(msg){ const s = JSON.stringify(msg); for (const ws of wss.clients) if (ws.readyState === 1 && ws.bufferedAmount < 2e6) ws.send(s); }
 function cfgPublic(){
   const acc = office ? office.acc : accounts.paper;
-  return {mode: acc.kind === 'paper' ? 'paper' : 'exchange', account: acc.id, real: !!acc.real, accounts: office ? office.accountsPublic() : [], quotes: CFG.quotes, marketType: CFG.marketType, venue: office ? office.venue() : '', tf: CFG.timeframe, tfMs: market.tf, tz: CFG.tz, ai: aiEnabled(), profiles: PROFILES,
+  return {serverIp, mode: acc.kind === 'paper' ? 'paper' : 'exchange', account: acc.id, real: !!acc.real, accounts: office ? office.accountsPublic() : [], quotes: CFG.quotes, marketType: CFG.marketType, venue: office ? office.venue() : '', tf: CFG.timeframe, tfMs: market.tf, tz: CFG.tz, ai: aiEnabled(), profiles: PROFILES,
     coins: Object.values(market.coins).map(c => ({sym: c.sym, name: coinName(c.sym), dp: priceDp(c.price || c.cur?.c || 1), qp: qtyDp(c.price || 1)}))};
 }
 function coinsPayload(full){
@@ -81,6 +102,16 @@ wss.on('connection', ws => {
         case 'approve': await office.approve(+m.id, !!m.ok); break;
         case 'close': await office.manualClose(+m.id); break;
         case 'reset': if (!office.resetPaper()) sendTo(ws, {t: 'toast', text: 'Сброс доступен только для виртуального счёта'}); break;
+        case 'reconnect': {
+          const a = accounts[String(m.id)];
+          if (!a || a.kind !== 'exchange') break;
+          if (!a.configured){ sendTo(ws, {t: 'toast', text: a.error}); break; }
+          sendTo(ws, {t: 'toast', text: `Проверяю «${a.label}»…`});
+          const ok = await office.connectAccount(a.id);
+          sendTo(ws, {t: 'toast', text: ok ? `«${a.label}» подключён` : `«${a.label}»: ${a.error}`});
+          sendTo(ws, {t: 'accounts', accounts: office.accountsPublic(), active: office.state.active});
+          break;
+        }
         case 'account': {
           try { await office.switchAccount(String(m.id), m.confirm === true); }
           catch (e) { sendTo(ws, {t: 'toast', text: e.message}); sendTo(ws, {t: 'accounts', accounts: office.accountsPublic(), active: office.state.active}); }

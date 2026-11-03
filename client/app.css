@@ -362,3 +362,14 @@ html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,
 .amcheck{display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer}
 .amcheck input{accent-color:var(--down);width:16px;height:16px}
 .acctnote{font-size:12px;color:var(--muted);margin:-4px 0 10px}
+
+/* подключение счетов */
+.acctlist{display:flex;flex-direction:column;gap:6px}
+.acctrow{background:var(--glass-2);border-radius:var(--r-md);padding:9px 11px;box-shadow:var(--tile-shadow)}
+.acctmain{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.acctst{font-size:11.5px;font-weight:600;border-radius:999px;padding:1px 8px;--t:var(--faint);background:color-mix(in srgb,var(--t) 15%,transparent);color:color-mix(in srgb,var(--t) 85%,var(--text))}
+.acctst.ok{--t:var(--up)} .acctst.bad{--t:var(--down)} .acctst.off{--t:var(--faint)}
+.accterr{margin:6px 0 8px;font-size:12.5px;line-height:1.4;color:color-mix(in srgb,var(--down) 70%,var(--text))}
+.acctrow .btn{margin-top:4px}
+.acctnote{font-size:12px;color:var(--muted);margin:8px 2px 0}
+.acctnote a{color:var(--accent)}

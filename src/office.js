@@ -97,8 +97,8 @@ export class Office extends EventEmitter {
     try { await acc.broker.init(Object.values(this.market.coins).map(c => c.symbol)); }
     catch (e) {
       const err = describeError(e), first = acc.error !== err;
-      acc.ready = false; acc.error = err; acc.failedAt = Date.now();
-      if (first) console.warn(`[account] ${acc.label}:`, err);
+      acc.ready = false; acc.error = err; acc.rawError = String(e && e.message || e).slice(0, 400); acc.failedAt = Date.now();
+      if (first) console.warn(`[account] ${acc.label}: ${err} | ответ биржи: ${acc.rawError.slice(0, 200)}`);
       this.emit('accounts'); return false;
     }
     const wasReady = acc.ready; acc.ready = true; acc.error = '';

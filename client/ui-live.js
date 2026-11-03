@@ -25,7 +25,7 @@ function bootLive(){
   on('state', ()=>{ if (!uiReady) return; syncControls(); renderApproval(); if (activeTab==='port') renderPortfolio(false); });
   on('feed', m=>{ if (uiReady) addFeedItem(m, true); });
   on('status', renderStatus); on('conn', renderStatus);
-  on('accounts', renderAccounts); on('hello', renderAccounts); on('state', ()=>{ if (S.account && S.account.id !== shownAccount) renderAccounts(); });
+  on('accounts', ()=>{ renderAccounts(); renderAcctBox(); }); on('hello', renderAccounts); on('state', ()=>{ if (S.account && S.account.id !== shownAccount) renderAccounts(); renderAcctBox(); });
   on('meetStart', ()=>{ if (!MEET.active){ gatherMeeting(); for (const a of AG_LIST) say(a, '…', 60); } updateMeetBtn(); });
   on('meeting', async m=>{
     if (m.error){ for (const a of AG_LIST) a.bubble = null; toast(m.error, 4500); endMeeting(); updateMeetBtn(); return; }
@@ -317,11 +317,22 @@ function drawChart(){
 // ---------- портфель ----------
 const EQ = {sized:false, hover:null};
 let portBuilt = false;
+// подключение счетов: статус, причина ошибки, повторная проверка
+function renderAcctBox(){
+  const box = $('#acctBox'); if (!box) return;
+  const list = (S.accounts && S.accounts.length ? S.accounts : CFGC.accounts) || [];
+  const ex = list.filter(a=>a.kind==='exchange'); if (!ex.length){ box.innerHTML = ''; return; }
+  const html = `<div class="sec">Подключение счетов</div><div class="acctlist">` + ex.map(a=>{
+    const st = !a.configured ? ['off','не настроен'] : a.ready ? ['ok','подключён'] : ['bad','нет связи'];
+    return `<div class="acctrow"><div class="acctmain"><b>${esc(a.label)}</b><span class="acctst ${st[0]}">${st[1]}</span></div>${a.error && !a.ready ? `<p class="accterr">${esc(a.error)}</p>` : ''}${a.configured ? `<button type="button" class="btn btn-sm" data-reconnect="${a.id}">Проверить подключение</button>` : ''}</div>`;
+  }).join('') + `</div>` + (CFGC.serverIp ? `<p class="acctnote">IP сервера для белого списка ключа Binance: <b class="mono">${esc(CFGC.serverIp)}</b> · подробности: <a href="/api/diag" target="_blank" rel="noopener">диагностика</a></p>` : `<p class="acctnote">Подробности: <a href="/api/diag" target="_blank" rel="noopener">диагностика</a></p>`);
+  if (box._h !== html){ box._h = html; box.innerHTML = html; box.querySelectorAll('[data-reconnect]').forEach(b=>b.onclick = ()=>wsSend({t:'reconnect', id:b.dataset.reconnect})); }
+}
 function renderPortfolio(full){
   const el = $('#pPort');
   if (full || !portBuilt){
     const paper = CFGC.mode === 'paper';
-    el.innerHTML = `<div class="venue">${esc(CFGC.venue||'')}</div><div id="killBox"></div><div class="kgrid" id="pK"></div>
+    el.innerHTML = `<div class="venue">${esc(CFGC.venue||'')}</div><div id="acctBox"></div><div id="killBox"></div><div class="kgrid" id="pK"></div>
       <div class="sec">Капитал<span class="note">${paper ? 'виртуальный счёт' : 'оценка по сделкам офиса'}</span></div>
       <div class="eqbox" id="eqbox"><canvas id="eqc"></canvas><div class="tip" id="eqtip" hidden></div></div>
       <div id="pendBox"></div>
@@ -333,6 +344,7 @@ function renderPortfolio(full){
     box.addEventListener('pointermove', e=>{ const r = box.getBoundingClientRect(); EQ.hover = {x:e.clientX-r.left, y:e.clientY-r.top}; drawEquity(); });
     box.addEventListener('pointerleave', ()=>{ EQ.hover = null; drawEquity(); });
     if ($('#bReset')) $('#bReset').onclick = onReset;
+    renderAcctBox();
     el.onclick = e=>{
       const b = e.target.closest('[data-close]'); if (b){ b.disabled = true; b.textContent = 'Закрываю…'; wsSend({t:'close', id:+b.dataset.close}); }
       const ap = e.target.closest('[data-appr]'); if (ap){ approvePending(+ap.dataset.appr, ap.dataset.ok==='1'); ap.closest('.appr-row').style.opacity = .5; }

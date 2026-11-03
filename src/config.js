@@ -50,9 +50,9 @@ export const CFG = {
   apiSecret: env.EXCHANGE_API_SECRET || '',
   // счёт Binance: live — настоящие деньги, demo — демо-торговля Binance, mock — имитация для проверки
   binance: {
-    key: env.BINANCE_API_KEY || (legacyEx === 'binance' ? env.EXCHANGE_API_KEY || '' : ''),
-    secret: env.BINANCE_API_SECRET || (legacyEx === 'binance' ? env.EXCHANGE_API_SECRET || '' : ''),
-    env: (env.BINANCE_ENV || (legacyEx === 'binance' ? env.EXCHANGE_ENV || 'demo' : 'demo')).toLowerCase(),
+    key: (env.BINANCE_API_KEY || (legacyEx === 'binance' ? env.EXCHANGE_API_KEY || '' : '')).trim(),
+    secret: (env.BINANCE_API_SECRET || (legacyEx === 'binance' ? env.EXCHANGE_API_SECRET || '' : '')).trim(),
+    env: (env.BINANCE_ENV || (legacyEx === 'binance' ? env.EXCHANGE_ENV || 'demo' : 'demo')).trim().toLowerCase(),
     maxOrderUsd: +env.BINANCE_MAX_ORDER_USD || 0,
   },
   leverage: Math.max(1, Math.min(5, +env.LEVERAGE || 1)),
@@ -73,15 +73,23 @@ export const CFG = {
 if (!CFG.binance.maxOrderUsd) CFG.binance.maxOrderUsd = CFG.binance.env === 'live' ? 200 : CFG.maxOrderUsd;
 
 export function validateConfig() {
+  // только то, без чего офис не может работать вообще; проблемы конкретного счёта показываются в интерфейсе
   const errs = [];
   if (!['paper', 'exchange'].includes(CFG.mode)) errs.push('TRADING_MODE должен быть paper или exchange');
   if (!['bybit', 'binance', 'mock'].includes(CFG.quotes)) errs.push('QUOTES должен быть binance, bybit или mock');
   if (!['swap', 'spot'].includes(CFG.marketType)) errs.push('MARKET_TYPE должен быть swap или spot');
-  if (!['live', 'demo', 'mock'].includes(CFG.binance.env)) errs.push('BINANCE_ENV должен быть live (настоящий счёт), demo или mock');
-  if (CFG.binance.env === 'mock' && CFG.quotes !== 'mock') errs.push('BINANCE_ENV=mock работает только вместе с QUOTES=mock');
-  if (CFG.apiKey && CFG.exchange === 'bybit' && !['demo', 'testnet'].includes(CFG.exchangeEnv)) errs.push('Для Bybit поддерживаются только EXCHANGE_ENV=demo и testnet');
-  const anyExchange = (CFG.binance.key && CFG.binance.secret) || CFG.binance.env === 'mock' || (CFG.apiKey && CFG.apiSecret) || (CFG.mode === 'exchange' && CFG.exchange === 'mock');
-  if (anyExchange && !CFG.password) errs.push('Задайте ACCESS_PASSWORD: без пароля любой, кто знает адрес, сможет управлять сделками на бирже');
-  if (CFG.binance.env === 'live' && CFG.binance.key && CFG.password.length < 10) errs.push('Для настоящего счёта Binance пароль ACCESS_PASSWORD должен быть не короче 10 символов');
   return errs;
+}
+// почему счёт Binance нельзя подключить (пустая строка — можно)
+export function binanceProblem() {
+  const b = CFG.binance;
+  if (!['live', 'demo', 'mock'].includes(b.env)) return `BINANCE_ENV=«${b.env}» — нужно live (настоящий счёт) или demo`;
+  if (b.env === 'mock') return CFG.quotes === 'mock' ? '' : 'BINANCE_ENV=mock работает только вместе с QUOTES=mock';
+  if (!b.key && !b.secret) return 'Не настроен: добавьте BINANCE_API_KEY и BINANCE_API_SECRET в настройки сервера';
+  if (!b.key) return 'Не задан BINANCE_API_KEY';
+  if (!b.secret) return 'Не задан BINANCE_API_SECRET';
+  if (/\s/.test(b.key) || /\s/.test(b.secret)) return 'В ключе или секрете есть пробел или перенос строки — скопируйте их заново без лишних символов';
+  if (!CFG.password) return 'Задайте ACCESS_PASSWORD: без пароля любой, кто знает адрес, сможет управлять сделками';
+  if (b.env === 'live' && CFG.password.length < 10) return 'Для реального счёта пароль ACCESS_PASSWORD должен быть не короче 10 символов';
+  return '';
 }
