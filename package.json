@@ -1,0 +1,21 @@
+{
+  "name": "ja-capital-office",
+  "version": "1.0.0",
+  "description": "JA Capital: AI-агенты торгуют криптой на живых котировках (paper / demo / testnet)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "mock": "TRADING_MODE=exchange EXCHANGE=mock NEWS_FEEDS=mock ACCESS_PASSWORD=demo node server.js",
+    "check": "node scripts/check.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "ccxt": "^4.5.91",
+    "ws": "^8.22.1"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "private": true
+}

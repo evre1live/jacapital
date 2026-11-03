@@ -1,0 +1,33 @@
+# Blueprint для Render: New → Blueprint → выберите репозиторий
+services:
+  - type: web
+    name: ja-capital-office
+    runtime: node
+    region: frankfurt        # не США: биржи блокируют американские IP
+    plan: starter            # бесплатный план засыпает через 15 минут — агенты перестанут торговать
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: ACCESS_PASSWORD
+        sync: false
+      - key: TRADING_MODE
+        value: paper
+      - key: EXCHANGE
+        value: bybit
+      - key: EXCHANGE_ENV
+        value: demo
+      - key: MARKET_TYPE
+        value: swap
+      - key: EXCHANGE_API_KEY
+        sync: false
+      - key: EXCHANGE_API_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: ja-capital-data
+      mountPath: /var/data
+      sizeGB: 1
