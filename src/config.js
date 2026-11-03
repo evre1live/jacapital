@@ -54,6 +54,8 @@ export const CFG = {
     secret: (env.BINANCE_API_SECRET || (legacyEx === 'binance' ? env.EXCHANGE_API_SECRET || '' : '')).trim(),
     env: (env.BINANCE_ENV || (legacyEx === 'binance' ? env.EXCHANGE_ENV || 'demo' : 'demo')).trim().toLowerCase(),
     maxOrderUsd: +env.BINANCE_MAX_ORDER_USD || 0,
+    // прокси со статическим IP (QuotaGuard, Fixie и т. п.): на Render исходящий адрес меняется, а белый список Binance принимает только отдельные IP
+    proxy: (env.BINANCE_PROXY || env.QUOTAGUARDSTATIC_URL || env.QUOTAGUARDSHIELD_URL || env.FIXIE_URL || '').trim(),
   },
   leverage: Math.max(1, Math.min(5, +env.LEVERAGE || 1)),
   coins: (env.COINS || 'BTC,ETH,SOL,BNB,XRP,DOGE').split(',').map(s => s.trim().toUpperCase()).filter(Boolean),

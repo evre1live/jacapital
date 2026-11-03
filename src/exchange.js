@@ -34,6 +34,7 @@ export function makeAccounts(CFG, data) {
       // сверка часов с Binance, запас по времени запроса, только нужные рынки (без COIN-M и опционов)
       ex = new ccxt.binance({...opts, apiKey: b.key, secret: b.secret, options: {...opts.options, adjustForTimeDifference: true, recvWindow: 10000, fetchMarkets: CFG.marketType === 'swap' ? ['linear'] : ['spot']}});
       if (b.env === 'demo') ex.enableDemoTrading(true);
+      if (b.proxy) ex.httpsProxy = b.proxy;
     }
     acc.broker = new ExchangeBroker(ex, CFG, {name: 'Binance', live: b.env === 'live', checkKey: b.env === 'live', protect: b.env !== 'mock' && CFG.marketType === 'swap', binance: b.env !== 'mock'});
   }
@@ -54,16 +55,17 @@ export function makeAccounts(CFG, data) {
 
 export function symbolFor(base, marketType) { return marketType === 'swap' ? `${base}/USDT:USDT` : `${base}/USDT`; }
 
-let SERVER_IP = '';
-export function setServerIp(ip){ SERVER_IP = ip || ''; }
+let SERVER_IP = '', VIA_PROXY = false;
+export function setServerIp(ip, viaProxy = false){ SERVER_IP = ip || ''; VIA_PROXY = viaProxy; }
+export const maskProxy = u => { try { const x = new URL(u); return `${x.protocol}//${x.host}`; } catch { return 'задан'; } };
 export function describeError(e) {
   const msg = String(e && (e.message || e)).slice(0, 400);
   if (e && e.userMessage) return e.userMessage;
   const raw = (msg.match(/"code":\s*(-?\d+)[^}]*"msg":\s*"([^"]+)"/) || []);
   const tail = raw[1] ? ` (Binance ${raw[1]}: ${raw[2]})` : '';
-  const ip = SERVER_IP ? ` IP сервера: ${SERVER_IP}.` : '';
+  const ip = VIA_PROXY ? (SERVER_IP ? ` Запросы идут через прокси, его IP: ${SERVER_IP}.` : '') : (SERVER_IP ? ` IP сервера сейчас: ${SERVER_IP}, но на Render он меняется — для белого списка нужен прокси со статическим IP (BINANCE_PROXY).` : '');
   if (/451|restricted location|not available in your region|CloudFront|Service unavailable from a restricted/i.test(msg)) return 'Биржа недоступна из региона сервера (код 451). Сервер должен быть во Франкфурте или Сингапуре, не в США.' + tail;
-  if (/-2015|Invalid API-key, IP, or permissions/i.test(msg)) return `Binance не принял ключ: неверный ключ, адрес сервера не в списке разрешённых IP или у ключа нет нужных прав (чтение и «Enable Futures»).${ip} Если у ключа включён список IP — добавьте туда этот адрес.` + tail;
+  if (/-2015|Invalid API-key, IP, or permissions/i.test(msg)) return `Binance не принял ключ: неверный ключ, адрес сервера не в списке разрешённых IP или у ключа нет нужных прав (чтение и «Enable Futures»).${ip} Проверьте список IP у ключа.` + tail;
   if (/-2014|API-key format invalid/i.test(msg)) return 'Неверный формат BINANCE_API_KEY: скопируйте ключ заново, целиком и без пробелов.' + tail;
   if (/-2008|Invalid Api-Key ID/i.test(msg)) return 'Такого ключа нет на этом счёте. Ключ от демо-счёта не работает на реальном и наоборот — проверьте BINANCE_ENV (live или demo).' + tail;
   if (/-1022|Signature for this request is not valid/i.test(msg)) return 'Неверный BINANCE_API_SECRET: секрет не подходит к ключу. Скопируйте его заново (Binance показывает секрет только при создании ключа).' + tail;

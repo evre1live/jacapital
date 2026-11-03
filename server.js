@@ -5,7 +5,8 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {WebSocketServer} from 'ws';
 import {CFG, validateConfig, binanceProblem} from './src/config.js';
-import {makeData, makeAccounts, describeError, setServerIp} from './src/exchange.js';
+import {makeData, makeAccounts, describeError, setServerIp, maskProxy} from './src/exchange.js';
+import {ProxyAgent} from 'undici';
 import {Market} from './src/market.js';
 import {News} from './src/news.js';
 import {Office} from './src/office.js';
@@ -21,14 +22,27 @@ if (!CFG.password) console.warn('[!] ACCESS_PASSWORD не задан — инт�
 {
   const b = CFG.binance, has = v => v ? `задан (${v.length} симв.)` : 'НЕ ЗАДАН';
   const near = Object.keys(process.env).filter(k => /binance|bybit|exchange|api_?key|api_?secret|secret_?key|password/i.test(k)).sort();
-  console.log(`[binance] BINANCE_ENV=${process.env.BINANCE_ENV ? b.env : `не задан (по умолчанию ${b.env})`}; BINANCE_API_KEY ${has(b.key)}; BINANCE_API_SECRET ${has(b.secret)}; ACCESS_PASSWORD ${!CFG.password ? 'НЕ ЗАДАН' : CFG.password.length < 10 ? 'короче 10 симв.' : 'задан'}; переменные с похожими именами: ${near.join(', ') || 'нет'}`);
+  console.log(`[binance] BINANCE_ENV=${process.env.BINANCE_ENV ? b.env : `не задан (по умолчанию ${b.env})`}; BINANCE_API_KEY ${has(b.key)}; BINANCE_API_SECRET ${has(b.secret)}; ACCESS_PASSWORD ${!CFG.password ? 'НЕ ЗАДАН' : CFG.password.length < 10 ? 'короче 10 симв.' : 'задан'}; прокси ${b.proxy ? maskProxy(b.proxy) : 'нет'}; переменные с похожими именами: ${near.join(', ') || 'нет'}`);
   const problem = binanceProblem();
   console.log(problem ? `[binance] счёт не подключён: ${problem}` : '[binance] настройки в порядке, подключаюсь');
 }
 
 // внешний IP сервера — его нужно добавить в белый список ключа Binance, если список включён
 let serverIp = '';
-fetch('https://api.ipify.org?format=json', {signal: AbortSignal.timeout(6000)}).then(r => r.json()).then(j => { serverIp = j.ip || ''; setServerIp(serverIp); console.log('IP сервера:', serverIp); }).catch(() => {});
+const viaProxy = !!CFG.binance.proxy;
+async function detectIp(){
+  const ips = new Set();
+  // несколько запросов: и прокси, и Render могут выходить с разных адресов
+  for (let i = 0; i < (viaProxy ? 4 : 3); i++){
+    try {
+      const r = await fetch('https://api.ipify.org?format=json', {signal: AbortSignal.timeout(8000), ...(viaProxy ? {dispatcher: new ProxyAgent(CFG.binance.proxy)} : {})});
+      const j = await r.json(); if (j.ip) ips.add(j.ip);
+    } catch (e) { if (viaProxy && !ips.size && i === 0) console.warn('[binance] прокси не отвечает:', String(e.message || e).slice(0, 160)); }
+  }
+  serverIp = [...ips].join(', '); setServerIp(serverIp, viaProxy);
+  console.log(viaProxy ? `[binance] запросы к Binance идут через прокси ${maskProxy(CFG.binance.proxy)}; IP для белого списка: ${serverIp || 'не определён'}` : `IP сервера сейчас: ${serverIp || 'не определён'} (на Render меняется в пределах диапазонов из Connect → Outbound)`);
+}
+detectIp();
 const data = makeData(CFG);
 const market = new Market(data, CFG);
 const accounts = makeAccounts(CFG, data);
@@ -56,7 +70,7 @@ const server = http.createServer(async (req, res) => {
     if (!isAuthed(req)) return send(res, 401, 'Нужен вход');
     const b = CFG.binance, mask = v => v ? `задан, ${v.length} символов, начинается на ${v.slice(0, 4)}…` : 'не задан';
     const d = {time: new Date().toISOString(), node: process.version, serverIp: serverIp || 'не определён', quotes: CFG.quotes, marketType: CFG.marketType, market: market.status,
-      binance: {env: b.env, key: mask(b.key), secret: b.secret ? `задан, ${b.secret.length} символов` : 'не задан', maxOrderUsd: b.maxOrderUsd},
+      binance: {env: b.env, proxy: b.proxy ? maskProxy(b.proxy) : 'нет', key: mask(b.key), secret: b.secret ? `задан, ${b.secret.length} символов` : 'не задан', maxOrderUsd: b.maxOrderUsd},
       accounts: Object.values(accounts).map(a => ({id: a.id, label: a.label, configured: a.configured, ready: a.ready, error: a.error || '', raw: a.rawError || '', hedge: a.broker ? !!a.broker.hedge : null,
         timeOffsetMs: a.broker && a.broker.ex && a.broker.ex.options ? a.broker.ex.options.timeDifference ?? null : null, balance: a.broker ? a.broker.lastBalance || null : null})),
       active: office ? office.state.active : null};
@@ -80,7 +94,7 @@ function sendTo(ws, msg){ if (ws.readyState === 1 && ws.bufferedAmount < 2e6) ws
 function broadcast(msg){ const s = JSON.stringify(msg); for (const ws of wss.clients) if (ws.readyState === 1 && ws.bufferedAmount < 2e6) ws.send(s); }
 function cfgPublic(){
   const acc = office ? office.acc : accounts.paper;
-  return {serverIp, mode: acc.kind === 'paper' ? 'paper' : 'exchange', account: acc.id, real: !!acc.real, accounts: office ? office.accountsPublic() : [], quotes: CFG.quotes, marketType: CFG.marketType, venue: office ? office.venue() : '', tf: CFG.timeframe, tfMs: market.tf, tz: CFG.tz, ai: aiEnabled(), profiles: PROFILES,
+  return {serverIp, viaProxy, mode: acc.kind === 'paper' ? 'paper' : 'exchange', account: acc.id, real: !!acc.real, accounts: office ? office.accountsPublic() : [], quotes: CFG.quotes, marketType: CFG.marketType, venue: office ? office.venue() : '', tf: CFG.timeframe, tfMs: market.tf, tz: CFG.tz, ai: aiEnabled(), profiles: PROFILES,
     coins: Object.values(market.coins).map(c => ({sym: c.sym, name: coinName(c.sym), dp: priceDp(c.price || c.cur?.c || 1), qp: qtyDp(c.price || 1)}))};
 }
 function coinsPayload(full){

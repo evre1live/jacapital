@@ -325,7 +325,7 @@ function renderAcctBox(){
   const html = `<div class="sec">Подключение счетов</div><div class="acctlist">` + ex.map(a=>{
     const st = !a.configured ? ['off','не настроен'] : a.ready ? ['ok','подключён'] : ['bad','нет связи'];
     return `<div class="acctrow"><div class="acctmain"><b>${esc(a.label)}</b><span class="acctst ${st[0]}">${st[1]}</span></div>${a.error && !a.ready ? `<p class="accterr">${esc(a.error)}</p>` : ''}${a.configured ? `<button type="button" class="btn btn-sm" data-reconnect="${a.id}">Проверить подключение</button>` : ''}</div>`;
-  }).join('') + `</div>` + (CFGC.serverIp ? `<p class="acctnote">IP сервера для белого списка ключа Binance: <b class="mono">${esc(CFGC.serverIp)}</b> · подробности: <a href="/api/diag" target="_blank" rel="noopener">диагностика</a></p>` : `<p class="acctnote">Подробности: <a href="/api/diag" target="_blank" rel="noopener">диагностика</a></p>`);
+  }).join('') + `</div>` + (CFGC.serverIp ? `<p class="acctnote">${CFGC.viaProxy ? 'IP прокси для белого списка ключа Binance' : 'IP сервера сейчас (на Render меняется; для белого списка нужен прокси со статическим IP)'}: <b class="mono">${esc(CFGC.serverIp)}</b> · подробности: <a href="/api/diag" target="_blank" rel="noopener">диагностика</a></p>` : `<p class="acctnote">Подробности: <a href="/api/diag" target="_blank" rel="noopener">диагностика</a></p>`);
   if (box._h !== html){ box._h = html; box.innerHTML = html; box.querySelectorAll('[data-reconnect]').forEach(b=>b.onclick = ()=>wsSend({t:'reconnect', id:b.dataset.reconnect})); }
 }
 function renderPortfolio(full){
