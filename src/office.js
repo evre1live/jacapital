@@ -102,6 +102,7 @@ export class Office extends EventEmitter {
       this.emit('accounts'); return false;
     }
     const wasReady = acc.ready; acc.ready = true; acc.error = '';
+    if (!wasReady) console.log(`[account] ${acc.label}: подключён${acc.broker.lastBalance ? `, баланс ${Math.round((acc.broker.lastBalance.total || acc.broker.lastBalance.free || 0) * 100) / 100} USDT` : ''}`);
     const book = this.state.books[id], bal = acc.broker.lastBalance;
     if (!book.initialised && bal){
       book.cash = bal.total || bal.free || 0; book.startEquity = book.cash; book.dayStart = book.cash; book.peak = book.cash; book.initialised = true;
