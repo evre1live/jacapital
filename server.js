@@ -7,6 +7,10 @@ import {WebSocketServer} from 'ws';
 import {CFG, validateConfig, binanceProblem} from './src/config.js';
 import {makeData, makeAccounts, describeError, setServerIp, maskProxy} from './src/exchange.js';
 import {ProxyAgent} from 'undici';
+import {Worker} from 'node:worker_threads';
+import ccxt from 'ccxt';
+import {loadAll, summaryLines, BT_VERSION} from './src/backtest.js';
+import {symbolFor} from './src/exchange.js';
 import {Market} from './src/market.js';
 import {News} from './src/news.js';
 import {Office} from './src/office.js';
@@ -76,6 +80,10 @@ const server = http.createServer(async (req, res) => {
       active: office ? office.state.active : null};
     return send(res, 200, JSON.stringify(d, null, 2), {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'});
   }
+  if (url.pathname === '/api/backtest'){
+    if (!isAuthed(req)) return send(res, 401, 'Нужен вход');
+    return send(res, 200, JSON.stringify(btPublic(true)), {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'});
+  }
   if (!isAuthed(req)) return send(res, 200, loginPage(), {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'});
   let p = url.pathname === '/' ? '/index.html' : url.pathname;
   const file = path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[\/\\])+/, ''));
@@ -103,7 +111,7 @@ function coinsPayload(full){
 }
 wss.on('connection', ws => {
   if (!office){ sendTo(ws, {t: 'loading', status: market.status}); }
-  else sendTo(ws, {t: 'hello', cfg: cfgPublic(), state: office.publicState(), feed: office.state.feed.slice(0, 120), coins: coinsPayload(true), now: Date.now()});
+  else { sendTo(ws, {t: 'hello', cfg: cfgPublic(), state: office.publicState(), feed: office.state.feed.slice(0, 120), coins: coinsPayload(true), now: Date.now()}); sendTo(ws, {t: 'backtest', bt: btPublic(true)}); }
   ws.on('message', async raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!office) return;
@@ -116,6 +124,11 @@ wss.on('connection', ws => {
         case 'approve': await office.approve(+m.id, !!m.ok); break;
         case 'close': await office.manualClose(+m.id); break;
         case 'reset': if (!office.resetPaper()) sendTo(ws, {t: 'toast', text: 'Сброс доступен только для виртуального счёта'}); break;
+        case 'backtestRun': {
+          if (BT.running) sendTo(ws, {t: 'toast', text: 'Бэктест уже идёт: ' + BT.text});
+          else { runBacktestBg('по запросу из интерфейса'); sendTo(ws, {t: 'toast', text: 'Запускаю бэктест — это займёт несколько минут.'}); }
+          break;
+        }
         case 'reconnect': {
           const a = accounts[String(m.id)];
           if (!a || a.kind !== 'exchange') break;
@@ -146,6 +159,43 @@ wss.on('connection', ws => {
     } catch (e) { console.error('[ws]', e); sendTo(ws, {t: 'toast', text: 'Ошибка: ' + e.message}); }
   });
 });
+
+// ---------- бэктест: история Binance → стратегии с комиссиями и фандингом ----------
+const BT_FILE = path.join(CFG.dataDir, 'backtest.json');
+const BT = {running: false, text: '', error: '', res: null};
+try { const j = JSON.parse(fs.readFileSync(BT_FILE, 'utf8')); if (j && j.version === BT_VERSION) BT.res = j; } catch {}
+function btPublic(full){ return {running: BT.running, text: BT.text, error: BT.error, res: full ? BT.res : (BT.res ? {ts: BT.res.ts} : null)}; }
+function btStatus(text){ BT.text = text; broadcast({t: 'backtest', bt: btPublic(false)}); }
+async function runBacktestBg(why){
+  if (BT.running || !office) return;
+  if (CFG.quotes !== 'binance' && process.env.BACKTEST !== 'force'){ BT.error = 'Бэктест работает только с котировками Binance (QUOTES=binance).'; return; }
+  BT.running = true; BT.error = ''; const t0 = Date.now();
+  console.log(`[backtest] старт (${why})`);
+  try {
+    // отдельное подключение с паузами между запросами, чтобы не упереться в лимиты Binance
+    const ex = new ccxt.binance({enableRateLimit: true, rateLimit: 350, timeout: 20000, options: {defaultType: 'swap'}});
+    const coins = Object.keys(market.coins), now = Date.now();
+    const data = await loadAll({ex, coins, symbolFor: b => symbolFor(b, 'swap'), now, log: btStatus});
+    btStatus('считаю стратегии');
+    const params = {...office.state.params};
+    const res = await new Promise((ok, bad) => {
+      const w = new Worker(new URL('./src/backtest-worker.js', import.meta.url), {workerData: {data, opts: {coins, params, now}}});
+      w.once('message', m => m.ok ? ok(m.res) : bad(new Error(m.error))); w.once('error', bad);
+    });
+    res.took = Math.round((Date.now() - t0) / 1000);
+    BT.res = res;
+    try { fs.mkdirSync(CFG.dataDir, {recursive: true}); fs.writeFileSync(BT_FILE, JSON.stringify(res)); } catch (e) { console.warn('[backtest] не сохранил:', e.message); }
+    for (const l of summaryLines(res)) console.log(l);
+    console.log(`[backtest] готово за ${res.took} с`);
+    BT.text = '';
+  } catch (e) {
+    BT.error = describeError(e); BT.text = '';
+    console.warn('[backtest] ошибка:', String(e && e.stack || e).slice(0, 600));
+  } finally {
+    BT.running = false;
+    broadcast({t: 'backtest', bt: btPublic(true)});
+  }
+}
 
 // ---------- запуск ----------
 let stateT = null;
@@ -216,6 +266,8 @@ async function start(){
   setInterval(() => { for (const a of exAccounts()) if (a.ready) office.reconcile(a.id).catch(e => console.warn('[reconcile]', e.message)); }, 5 * 60000);
   setInterval(() => office.save(), 30000);
   broadcast({t: 'hello', cfg: cfgPublic(), state: office.publicState(), feed: office.state.feed.slice(0, 120), coins: coinsPayload(true), now: Date.now()});
+  // бэктест в фоне: при первом запуске и раз в неделю
+  if (process.env.BACKTEST !== 'off' && (!BT.res || Date.now() - BT.res.ts > 7 * 864e5)) setTimeout(() => runBacktestBg(BT.res ? 'прошла неделя' : 'первый запуск'), 20000);
 }
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { console.log('Сохраняю состояние и выключаюсь…'); if (office) office.save(); process.exit(0); });
 process.on('unhandledRejection', e => console.error('[unhandled]', e));

@@ -391,6 +391,21 @@ html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,
 .acctnote{font-size:12px;color:var(--muted);margin:8px 2px 0}
 .acctnote a{color:var(--accent)}
 
+/* бэктест */
+.btnote{font-size:12px;color:var(--muted);margin:6px 2px}
+.btact{display:flex;gap:8px;margin:6px 0 12px;flex-wrap:wrap}
+.btdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;flex:none}
+.btbox{width:min(900px,100%);max-height:92vh;overflow:auto}
+.bthead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px}
+.btbox h4{margin:18px 0 6px;font:600 15px var(--f-display);letter-spacing:-.01em}
+.btchart{width:100%;height:auto;display:block;margin:2px 0 6px}
+.btgrid{stroke:var(--hair);stroke-width:1}
+.btzero{stroke:var(--line);stroke-width:1.2}
+.btax{fill:var(--faint);font:10.5px var(--f-text, system-ui)}
+.btscroll{overflow-x:auto}
+.bttbl td,.bttbl th{white-space:nowrap}
+.btsub{font-size:11.5px;color:var(--muted);white-space:normal;margin-top:2px}
+
 </style>
 </head>
 <body>
@@ -615,6 +630,7 @@ function onServer(m){
     case 'react': emit('react', m); break;
     case 'toast': toast(m.text); break;
     case 'accounts': CFGC.accounts = m.accounts; S.accounts = m.accounts; emit('accounts'); break;
+    case 'backtest': S.bt = m.bt; if (m.bt.res && m.bt.res.windows) S.btRes = m.bt.res; emit('backtest'); break;
     case 'chat': { const cb = REQ[m.reqId]; if (cb){ delete REQ[m.reqId]; cb(m); } break; }
     case 'meetStart': emit('meetStart'); break;
     case 'meeting': emit('meeting', m); break;
@@ -3033,6 +3049,7 @@ function bootLive(){
   on('state', ()=>{ if (!uiReady) return; syncControls(); renderApproval(); if (activeTab==='port') renderPortfolio(false); });
   on('feed', m=>{ if (uiReady) addFeedItem(m, true); });
   on('status', renderStatus); on('conn', renderStatus);
+  on('backtest', renderBtBox);
   on('accounts', ()=>{ renderAccounts(); renderAcctBox(); }); on('hello', renderAccounts); on('state', ()=>{ if (S.account && S.account.id !== shownAccount) renderAccounts(); renderAcctBox(); });
   on('meetStart', ()=>{ if (!MEET.active){ gatherMeeting(); for (const a of AG_LIST) say(a, '…', 60); } updateMeetBtn(); });
   on('meeting', async m=>{
@@ -3325,6 +3342,70 @@ function drawChart(){
 // ---------- портфель ----------
 const EQ = {sized:false, hover:null};
 let portBuilt = false;
+// бэктест: короткая сводка в «Портфеле» и подробный отчёт
+const btPct = x => x == null ? '—' : (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(1).replace('.', ',') + '%';
+const btNum = (x, d = 2) => x == null ? '—' : x.toFixed(d).replace('.', ',');
+const BT_COLORS = {a5: 'var(--down)', a5free: 'var(--warn)', a1h: 'var(--down)', tl: 'var(--accent)', tls: '#8e5cf7', tl2: 'var(--faint)', btc: '#f7931a', ew: 'var(--muted)'};
+function renderBtBox(){
+  const box = $('#btBox'); if (!box) return;
+  const bt = S.bt || {}, r = S.btRes;
+  let body = '';
+  if (bt.running) body = `<p class="btnote">Идёт расчёт: ${esc(bt.text || '…')}</p>`;
+  else if (bt.error) body = `<p class="accterr">${esc(bt.error)}</p>`;
+  if (r){
+    const w = r.windows[0], pick = ['a5', 'tl', 'btc'].map(id => w.rows.find(x => x.id === id)).filter(Boolean);
+    body += `<table class="tbl"><tbody>${pick.map(x => `<tr><td><span class="btdot" style="background:${BT_COLORS[x.id]}"></span>${esc(x.name)}</td><td class="num ${x.m && x.m.total >= 0 ? 'up' : 'down'}">${x.m ? btPct(x.m.total) : '—'}</td></tr>`).join('')}</tbody></table>
+      <p class="btnote">${esc(w.title)}, с комиссиями и фандингом · расчёт от ${new Date(r.ts).toLocaleString('ru-RU', {day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'})}</p>`;
+  } else if (!bt.running && !bt.error) body = `<p class="btnote">Ещё не считали.</p>`;
+  const html = `<div class="sec">Проверка на истории<span class="note">бэктест</span></div>${body}<div class="btact">${r ? '<button type="button" class="btn btn-sm" id="bBtOpen">Открыть отчёт</button>' : ''}<button type="button" class="btn btn-sm" id="bBtRun"${bt.running ? ' disabled' : ''}>${bt.running ? 'Считаю…' : 'Пересчитать'}</button></div>`;
+  if (box._h === html) return; box._h = html; box.innerHTML = html;
+  const o = $('#bBtOpen'); if (o) o.onclick = openBtReport;
+  $('#bBtRun').onclick = () => wsSend({t: 'backtestRun'});
+}
+function btChart(w){
+  const rows = w.rows.filter(x => x.curve && x.curve.length > 1); if (!rows.length) return '';
+  const W = 640, H = 200, P = {l: 50, r: 10, t: 10, b: 22};
+  let t0 = Infinity, t1 = -Infinity, lo = Infinity, hi = -Infinity;
+  const L = v => Math.log(Math.max(v, 1e-3));
+  for (const x of rows) for (const [t, v] of x.curve){ t0 = Math.min(t0, t); t1 = Math.max(t1, t); lo = Math.min(lo, L(v)); hi = Math.max(hi, L(v)); }
+  if (hi - lo < 0.04){ hi += 0.02; lo -= 0.02; }
+  const X = t => P.l + (t - t0) / (t1 - t0 || 1) * (W - P.l - P.r), Y = v => P.t + (hi - L(v)) / (hi - lo) * (H - P.t - P.b);
+  let ticks = [-0.95, -0.9, -0.75, -0.5, -0.25, -0.1, 0, 0.1, 0.25, 0.5, 1, 2, 4, 9, 19, 49].filter(r => L(1 + r) >= lo && L(1 + r) <= hi);
+  while (ticks.length > 6) ticks = ticks.filter((_, i) => i % 2 === 0 || ticks[i] === 0);
+  const grid = ticks.map(r => `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(1 + r).toFixed(1)}" y2="${Y(1 + r).toFixed(1)}" class="${r === 0 ? 'btzero' : 'btgrid'}"/><text x="${P.l - 6}" y="${(Y(1 + r) + 4).toFixed(1)}" class="btax" text-anchor="end">${r === 0 ? '0%' : btPct(r).replace(',0%', '%')}</text>`).join('');
+  const d = t => new Date(t).toLocaleDateString('ru-RU', {day: 'numeric', month: 'short', year: '2-digit'});
+  const lines = rows.map(x => `<polyline fill="none" stroke="${BT_COLORS[x.id] || 'var(--muted)'}" stroke-width="${x.id === 'a5' || x.id === 'a1h' || x.id === 'tl' ? 2 : 1.4}" stroke-linejoin="round" points="${x.curve.map(([t, v]) => `${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}"/>`).join('');
+  return `<svg class="btchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Кривые капитала: ${esc(w.title)}">${grid}${lines}<text x="${P.l}" y="${H - 5}" class="btax">${d(t0)}</text><text x="${W - P.r}" y="${H - 5}" class="btax" text-anchor="end">${d(t1)}</text></svg>`;
+}
+function openBtReport(){
+  const r = S.btRes; if (!r) return;
+  let m = $('#btModal');
+  if (!m){ m = document.createElement('div'); m.className = 'modal'; m.id = 'btModal'; m.hidden = true; document.body.appendChild(m); }
+  const sec = w => {
+    const rows = w.rows.map(x => { const mm = x.m || {}, st = x.stats || {}, c = x.costs;
+      return `<tr><td><span class="btdot" style="background:${BT_COLORS[x.id] || 'var(--muted)'}"></span>${esc(x.name)}${x.note ? `<div class="btsub">${esc(x.note)}</div>` : ''}</td>
+        <td class="num ${mm.total >= 0 ? 'up' : 'down'}">${btPct(mm.total)}</td><td class="num">${mm.cagr != null ? btPct(mm.cagr) : '—'}</td><td class="num">${btNum(mm.sharpe)}</td><td class="num">${mm.mdd != null ? btPct(-mm.mdd) : '—'}</td>
+        <td class="num">${st.trades != null ? st.trades : '—'}${st.win != null ? ` · ${Math.round(st.win * 100)}%` : ''}</td><td class="num">${c ? btPct(-(c.fees + c.slip + c.funding)) : '—'}</td></tr>`; }).join('');
+    return `<h4>${esc(w.title)}</h4>${btChart(w)}<div class="btscroll"><table class="tbl bttbl"><thead><tr><th>Стратегия</th><th class="num">Итог</th><th class="num">В год</th><th class="num">Шарп</th><th class="num">Просадка</th><th class="num">Сделок · прибыльных</th><th class="num">Издержки</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+  const all = r.windows.find(w => w.id === 'all');
+  let yrs = '';
+  if (all){
+    const ys = [...new Set(all.rows.flatMap(x => Object.keys(x.years)))].sort();
+    yrs = `<h4>По годам</h4><div class="btscroll"><table class="tbl bttbl"><thead><tr><th>Стратегия</th>${ys.map(y => `<th class="num">${y}</th>`).join('')}<th class="num">С 04.2025</th></tr></thead><tbody>${all.rows.map(x => `<tr><td>${esc(x.name)}</td>${ys.map(y => `<td class="num ${x.years[y] >= 0 ? 'up' : 'down'}">${x.years[y] != null ? btPct(x.years[y]) : '—'}</td>`).join('')}<td class="num">${x.afterPub ? btPct(x.afterPub.total) : '—'}</td></tr>`).join('')}</tbody></table></div>
+      <p class="btsub">«С 04.2025» — период после публикации исследования, на котором основан тренд-ансамбль: эти данные авторы видеть не могли.</p>`;
+  }
+  m.innerHTML = `<div class="mbox btbox" role="dialog" aria-modal="true" aria-labelledby="btTitle"><div class="bthead"><h3 id="btTitle">Проверка стратегий на истории Binance</h3><button type="button" class="btn btn-sm" id="btClose">Закрыть</button></div>
+    <p>Фьючерсы USDⓈ-M: ${esc(r.coins.join(', '))}. Комиссия ${btNum(r.cost.fee * 100)}% и проскальзывание ${btNum(r.cost.slip * 100)}% с каждой стороны, фандинг по фактическим ставкам Binance. Старт $10 000, без плеча. Новости в истории недоступны, поэтому агенты проверены только на технической части сигнала. Издержки — в процентах от стартового капитала.</p>
+    ${r.windows.map(sec).join('')}${yrs}</div>`;
+  const close = () => { m.hidden = true; document.removeEventListener('keydown', onKey); };
+  const onKey = ev => { if (ev.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  m.onclick = ev => { if (ev.target === m) close(); };
+  $('#btClose').onclick = close;
+  m.hidden = false; $('#btClose').focus();
+}
+
 // подключение счетов: статус, причина ошибки, повторная проверка
 function renderAcctBox(){
   const box = $('#acctBox'); if (!box) return;
@@ -3346,8 +3427,9 @@ function renderPortfolio(full){
       <div id="pendBox"></div>
       <div class="sec">Открытые позиции</div><div id="posBox"></div>
       <div class="sec">История сделок<span class="note" id="histNote"></span></div><div id="histBox"></div>
+      <div id="btBox"></div>
       ${paper ? `<div class="resetbox"><button type="button" class="btn btn-sm" id="bReset">Начать заново</button><span id="resetNote">Сбросит виртуальный счёт и историю.</span></div>` : ''}`;
-    portBuilt = true; EQ.sized = false; $('#posBox')._k = null;
+    portBuilt = true; EQ.sized = false; $('#posBox')._k = null; renderBtBox();
     const box = $('#eqbox');
     box.addEventListener('pointermove', e=>{ const r = box.getBoundingClientRect(); EQ.hover = {x:e.clientX-r.left, y:e.clientY-r.top}; drawEquity(); });
     box.addEventListener('pointerleave', ()=>{ EQ.hover = null; drawEquity(); });
