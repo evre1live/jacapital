@@ -704,13 +704,15 @@ const O3 = (()=>{
     cylAt(9, 110.5, 23.4, 2.3, 4.6, M.glass); cylAt(9, 110.5, 23.5, 2.1, 3, M.amber); cylAt(9, 110.5, 28, 1, 1.6, M.glass, 16); sphereAt(9, 110.5, 30.4, 1.2, M.glass);
     cylAt(12.6, 113.6, 23.4, 1.2, 2.2, M.glass, 16); cylAt(8, 114.6, 23.4, 1.2, 2.2, M.glass, 16);
     CUR = null;
-    // глобус
+    // глобус (своя группа — в «Манхэттене» скрыт)
+    grp('globe');
     const top = new THREE.Vector3(8.5, 15, 126);
-    for (const [fx, fy] of [[4,122],[13.5,123.5],[8,131]]){ const f = new THREE.Vector3(fx, 0, fy); const len = top.distanceTo(f); const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, len, 8), M.mahogD); leg.position.copy(top).add(f).multiplyScalar(0.5); leg.lookAt(top); leg.rotateX(Math.PI/2); leg.castShadow = true; scene.add(leg); }
+    for (const [fx, fy] of [[4,122],[13.5,123.5],[8,131]]){ const f = new THREE.Vector3(fx, 0, fy); const len = top.distanceTo(f); const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, len, 8), M.mahogD); leg.position.copy(top).add(f).multiplyScalar(0.5); leg.lookAt(top); leg.rotateX(Math.PI/2); leg.castShadow = true; put(leg); }
     const gt = canvasTex(512, 256, (c, w, h)=>{ c.fillStyle = '#e4cf9c'; c.fillRect(0,0,w,h); c.fillStyle = 'rgba(120,88,48,.6)'; for (const [x0,y0,rx,ry] of [[90,90,55,40],[130,170,30,50],[250,80,70,45],[280,160,40,40],[400,100,45,30],[420,190,30,25]]){ c.beginPath(); c.ellipse(x0,y0,rx,ry,0.3,0,Math.PI*2); c.fill(); } c.strokeStyle = 'rgba(90,60,30,.35)'; c.lineWidth = 1.5; for (let k=1;k<8;k++){ c.beginPath(); c.moveTo(0,k*h/8); c.lineTo(w,k*h/8); c.stroke(); c.beginPath(); c.moveTo(k*w/8,0); c.lineTo(k*w/8,h); c.stroke(); } });
     const globe = sphereAt(8.5, 126, 23, 6.6, std('#ffffff', {map:gt, roughness:0.45}));
     globe.rotation.z = 0.35; DYN.globe = globe;
-    const mer = new THREE.Mesh(new THREE.TorusGeometry(7.4, 0.35, 8, 40, Math.PI*1.3), M.brass); mer.position.set(8.5, 23, 126); mer.rotation.set(0, Math.PI/4, -0.6); scene.add(mer);
+    const mer = new THREE.Mesh(new THREE.TorusGeometry(7.4, 0.35, 8, 40, Math.PI*1.3), M.brass); mer.position.set(8.5, 23, 126); mer.rotation.set(0, Math.PI/4, -0.6); put(mer);
+    CUR = null;
   }
   function buildBookcase(){
     grp('bookcase');
@@ -1193,13 +1195,24 @@ const O3 = (()=>{
     // монитор: тонкая панель с наклоном 6°, экран-график ложится на её лицевую сторону
     {file:'mh_monitor', pbr:true, places: DX.map((x, i)=>({hide:['monitor'+i], cx:x+9, cy:DESK_Y+11.5, z:DESK_TOP, h:14, uniform:true, rot:0, screen:{i, x:0.0262, y:0.1355, w:0.962, h:0.47, tilt:0.105}}))},
     {file:'mh_lamp', pbr:true, places: DX.map((x, i)=>({hide:['lamp'+i], cx:x+55, cy:DESK_Y+8, z:DESK_TOP, h:14, uniform:true, rot:Math.PI}))},
-    {file:'snake_plant', mat:'plant', places: PLANTS.map(([x, y, big], k)=>({hide:['plant'+k], cx:x, cy:y, h:big ? 27 : 21, uniform:true, rot:k*1.3}))},
-    {file:'wooden_bookshelf', mat:'wood', tint:'#8a7a70', places:[{hide:['bookcase'], cx:18, cy:9.5, h:68, uniform:true, rot:-Math.PI/2}]},
-    {file:'mh_credenza', pbr:true, clearcoat:0.2, places:[{hide:['sideboard'], cx:7.8, cy:102, d:40, uniform:'d', rot:0, after:(i)=>{ GRP.sideTop.position.set(-2, i.top - 23, 0); }}]},
+    // растения в кашпо: четыре прежних места и три новых (углы и передний край, вне маршрутов агентов)
+    {file:'mh_plant_fig', pbr:true, places:[{hide:['plant0'], cx:49, cy:28, h:46, uniform:true, rot:0.4}]},
+    {file:'mh_plant_olive', pbr:true, places:[{hide:['plant1'], cx:417, cy:126, h:44, uniform:true, rot:1.1}]},
+    {file:'mh_plant_snake', pbr:true, places:[{hide:['plant2'], cx:42, cy:192, h:26, uniform:true, rot:0.3}, {hide:[], cx:150, cy:195, h:23, uniform:true, rot:2.2}]},
+    {file:'mh_plant_monstera', pbr:true, places:[{hide:['plant3'], cx:342, cy:189, h:26, uniform:true, rot:0.8}, {hide:[], cx:418, cy:191, h:24, uniform:true, rot:2.6}]},
+    {file:'mh_plant_palm', pbr:true, places:[{hide:[], cx:414, cy:20, h:44, uniform:true, rot:0.2}]},
+    // стеллажи: высокий вдоль левой стены, низкий в углу у окна (на месте старого шкафа)
+    {file:'mh_shelf_tall', pbr:true, tint:'#8b7b70', places:[{hide:[], cx:7, cy:40, d:40, uniform:'d', rot:0}]},
+    {file:'mh_shelf_low', pbr:true, tint:'#8b7b70', places:[{hide:['bookcase'], cx:19, cy:6, h:22.5, uniform:true, rot:-Math.PI/2}]},
+    // кофемашина на комоде (туда агенты ходят за кофе), напольная ваза, бар-тележка у правого окна
+    {file:'mh_espresso', pbr:true, places:[{hide:['sideTop'], cx:8.5, cy:96, z:18.1, h:10.5, uniform:true, rot:Math.PI/2}]},
+    {file:'mh_vase', pbr:true, places:[{hide:[], cx:9, cy:69, h:34, uniform:true, rot:0.5}]},
+    {file:'mh_barcart', pbr:true, places:[{hide:[], cx:411, cy:92, h:22, uniform:true, rot:Math.PI}]},
+    {file:'mh_credenza', pbr:true, clearcoat:0.2, places:[{hide:['sideboard'], cx:7.8, cy:102, d:40, uniform:'d', rot:0, after:(i)=>{ if (GRP.sideTop) GRP.sideTop.position.set(-2, i.top - 23, 0); }}]},
     {file:'mh_table', pbr:true, clearcoat:0.6, tint:'#a3a3a3', places:[{hide:['table'], cx:TABLE.x, cy:TABLE.y, w:54, d:54, h:24.8, rot:0}]},
     {file:'mh_sofa', pbr:true, places:[{hide:['sofa'], cx:15.5, cy:174, d:58, uniform:'d', rot:0}]},
     {file:'mh_lounge', pbr:true, places:[{hide:['armchair'], cx:388, cy:166, h:29, uniform:true, rot:Math.PI}]},
-    {file:'mh_floorlamp', pbr:true, places:[{hide:['floorlamp'], cx:11, cy:136, h:54, uniform:true, rot:Math.PI/2}]},
+    {file:'mh_floorlamp', pbr:true, places:[{hide:['floorlamp', 'globe'], cx:11, cy:136, h:54, uniform:true, rot:Math.PI/2}]},
   ];
   const PROP_MAT = {wood:{roughness:0.5, clearcoat:0.45, clearcoatRoughness:0.35}, leather:{roughness:0.55, clearcoat:0.25, clearcoatRoughness:0.5, sheen:0.3}, brass:{roughness:0.35, metalness:0.25, clearcoat:0.6}, plastic:{roughness:0.4}, plant:{roughness:0.75}};
   async function loadProps(){
