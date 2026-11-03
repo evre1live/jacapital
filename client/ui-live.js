@@ -8,7 +8,8 @@ const FILTERS = [['all','Все'],['news','Новости'],['risk','Риски'
 const FILTER_TAGS = {news:['news','brief'], risk:['risk'], signal:['signal'], trade:['trade','system'], meet:['meet','chat']};
 let feedFilter = 'all', activeTab = 'feed', uiReady = false;
 const CSS = {};
-function readCSS(){ const cs = getComputedStyle(document.documentElement); for (const k of ['text','muted','faint','line','up','down','accent','panel','panel-2']) CSS[k] = cs.getPropertyValue('--'+k).trim(); }
+function readCSS(){ const cs = getComputedStyle(document.documentElement); for (const k of ['text','muted','faint','line','up','down','accent','panel','panel-2','grid','ref','ema9','ema21']) CSS[k] = cs.getPropertyValue('--'+k).trim(); }
+function alpha(c, a){ c = String(c||'').trim(); if (c[0] !== '#') return c; let h = c.slice(1); if (h.length === 3) h = h.split('').map(x=>x+x).join(''); const n = parseInt(h.slice(0,6), 16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; }
 const CHATS = {nika:[], boris:[], timur:[], aliya:[]};
 let chatBusy = false;
 
@@ -47,7 +48,7 @@ function frame(now){
 
 function initStaticUI(){
   for (const a of AG_LIST){ const cv = document.createElement('canvas'); renderAvatarSized(a.id, cv); AVA[a.id] = cv.toDataURL(); }
-  $('#crew').innerHTML = AG_LIST.map(a=>`<button type="button" data-agent="${a.id}" aria-pressed="false" style="--c:${a.color}"><img class="ava" alt="" src="${AVA[a.id]}"><span class="who"><span class="nm">${a.name}<small>${a.short}</small></span><span class="st" data-st="${a.id}">—</span></span></button>`).join('');
+  $('#crew').innerHTML = AG_LIST.map(a=>`<button type="button" data-agent="${a.id}" aria-pressed="false" style="--c:${a.color}"><img class="ava" alt="" data-aid="${a.id}" src="${AVA[a.id]}"><span class="who"><span class="nm">${a.name}<small>${a.short}</small></span><span class="st" data-st="${a.id}">—</span></span></button>`).join('');
   $$('#crew button').forEach(b=>b.addEventListener('click', ()=>selectAgent(b.dataset.agent)));
   $('#filters').innerHTML = FILTERS.map(([k,l])=>`<button type="button" data-f="${k}" aria-pressed="${k==='all'}">${l}</button>`).join('');
   $$('#filters button').forEach(b=>b.addEventListener('click', ()=>{ feedFilter = b.dataset.f; $$('#filters button').forEach(x=>x.setAttribute('aria-pressed', x===b)); renderFeed(); }));
@@ -112,7 +113,7 @@ function feedItemHTML(m){
   if (m.tag==='news' && m.rel!=null){ const lv = Math.round(m.rel*5); extra = ` <span class="relbar" title="Надёжность источника ${Math.round(m.rel*100)}%">${[1,2,3,4,5].map(i=>`<i class="${i<=lv?'on':''}"></i>`).join('')}</span>`; }
   const link = m.link && /^https?:\/\//.test(m.link) ? ` <a href="${esc(m.link)}" target="_blank" rel="noopener noreferrer">источник</a>` : '';
   if (!a) return `<li class="msg sys" data-id="${m.id}"><div><div class="meta"><b>Офис</b><span class="tag">${TAG_RU[m.tag]||''}</span><span class="t">${t}</span></div><p>${esc(m.text)}</p></div></li>`;
-  return `<li class="msg" data-id="${m.id}" style="--c:${a.color}"><img class="ava" alt="" src="${AVA[a.id]}"><div><div class="meta"><b>${a.name}</b>${to?`→ ${to}`:''}<span class="tag ${m.tag}">${TAG_RU[m.tag]||''}</span>${extra}<span class="t">${t}</span></div><p>${esc(m.text)}${link}</p></div></li>`;
+  return `<li class="msg" data-id="${m.id}" style="--c:${a.color}"><img class="ava" alt="" data-aid="${a.id}" src="${AVA[a.id]}"><div><div class="meta"><b>${a.name}</b>${to?`→ ${to}`:''}<span class="tag ${m.tag}">${TAG_RU[m.tag]||''}</span>${extra}<span class="t">${t}</span></div><p>${esc(m.text)}${link}</p></div></li>`;
 }
 function renderFeed(){ const list = S.feed.filter(feedMatches).slice(0, 100); $('#feed').innerHTML = list.length ? list.map(feedItemHTML).join('') : `<li class="empty">Здесь пока тихо. Сообщения появятся, когда агенты начнут работу.</li>`; }
 function addFeedItem(m, fresh){
@@ -167,7 +168,7 @@ function drawSparks(){
     const up = pts[pts.length-1] >= pts[0]; const col = up ? CSS.up : CSS.down;
     x.beginPath(); pts.forEach((v,i)=>i?x.lineTo(X(i),Y(v)):x.moveTo(X(i),Y(v))); x.strokeStyle = col; x.lineWidth = 1.5; x.lineJoin = 'round'; x.stroke();
     x.lineTo(X(pts.length-1), r.height); x.lineTo(X(0), r.height); x.closePath();
-    const gr = x.createLinearGradient(0,0,0,r.height); gr.addColorStop(0, up?'rgba(79,209,139,.22)':'rgba(255,107,120,.22)'); gr.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = gr; x.fill();
+    const gr = x.createLinearGradient(0,0,0,r.height); gr.addColorStop(0, up?alpha(CSS.up,.22):alpha(CSS.down,.22)); gr.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = gr; x.fill();
     x.beginPath(); x.arc(X(pts.length-1), Y(pts[pts.length-1]), 2.2, 0, Math.PI*2); x.fillStyle = col; x.fill();
   }
 }
@@ -219,22 +220,22 @@ function drawChart(){
   const curY = Y(st.price);
   for (const v of niceTicks(lo, hi, 4)){
     const yy = Math.round(Y(v))+0.5; if (yy < pT || yy > pT+priceH) continue;
-    x.strokeStyle = 'rgba(160,158,200,.10)'; x.lineWidth = 1; x.beginPath(); x.moveTo(pL, yy); x.lineTo(pL+plotW, yy); x.stroke();
+    x.strokeStyle = CSS.grid; x.lineWidth = 1; x.beginPath(); x.moveTo(pL, yy); x.lineTo(pL+plotW, yy); x.stroke();
     if (Math.abs(yy - curY) < 14) continue;
     x.fillStyle = CSS.faint; x.textAlign = 'left'; x.fillText(axisFmt(sym, v), pL+plotW+8, yy);
   }
   x.textBaseline = 'alphabetic'; x.textAlign = 'center';
   const every = Math.max(1, Math.round(3600000/TF_MS)) * (N > 60 && TF_MS <= 60000 ? 2 : 1);
-  cs.forEach((k,i)=>{ if (Math.round(k.t/TF_MS) % every === 0){ x.fillStyle='rgba(160,158,200,.06)'; x.fillRect(Math.round(X(i)), pT, 1, plotH); x.fillStyle = CSS.faint; x.fillText(fmtTime(k.t), X(i), CH.h-6); } });
+  cs.forEach((k,i)=>{ if (Math.round(k.t/TF_MS) % every === 0){ x.fillStyle=CSS.grid; x.fillRect(Math.round(X(i)), pT, 1, plotH); x.fillStyle = CSS.faint; x.fillText(fmtTime(k.t), X(i), CH.h-6); } });
   const vmax = Math.max(...cs.map(k=>k.v)) || 1; const vb = pT + plotH; const bw = Math.max(1.5, step*0.62);
-  cs.forEach((k,i)=>{ const hgt = Math.max(1, k.v/vmax*volH); x.fillStyle = k.c>=k.o ? 'rgba(79,209,139,.28)' : 'rgba(255,107,120,.28)'; x.fillRect(X(i)-bw/2, vb-hgt, bw, hgt); });
+  cs.forEach((k,i)=>{ const hgt = Math.max(1, k.v/vmax*volH); x.fillStyle = k.c>=k.o ? alpha(CSS.up,.28) : alpha(CSS.down,.28); x.fillRect(X(i)-bw/2, vb-hgt, bw, hgt); });
   cs.forEach((k,i)=>{
     const col = k.c >= k.o ? CSS.up : CSS.down; x.fillStyle = col;
     x.fillRect(Math.round(X(i))-0.5, Y(k.h), 1, Math.max(1, Y(k.l)-Y(k.h)));
     const y1 = Y(Math.max(k.o,k.c)), y2 = Y(Math.min(k.o,k.c)); x.fillRect(X(i)-bw/2, y1, bw, Math.max(1, y2-y1));
   });
   const lineS = (arr, col)=>{ x.beginPath(); arr.forEach((v,i)=>i?x.lineTo(X(i+(n-arr.length)),Y(v)):x.moveTo(X(i+(n-arr.length)),Y(v))); x.strokeStyle = col; x.lineWidth = 1.6; x.lineJoin='round'; x.stroke(); };
-  lineS(e21.slice(-n), '#8f9cf2'); lineS(e9.slice(-n), '#f0b14a');
+  lineS(e21.slice(-n), CSS.ema21); lineS(e9.slice(-n), CSS.ema9);
   if (pos){
     const lvl = (v, col, label)=>{ const yy = Math.round(Y(v))+0.5; x.setLineDash([4,3]); x.strokeStyle = col; x.lineWidth = 1; x.beginPath(); x.moveTo(pL, yy); x.lineTo(pL+plotW, yy); x.stroke(); x.setLineDash([]); x.font = `600 10.5px ${font}`; x.textAlign='right'; x.textBaseline='bottom'; x.fillStyle = col; x.fillText(label, pL+plotW-4, yy-2); };
     lvl(pos.tp, CSS.up, `Тейк ${axisFmt(sym,pos.tp)}`); lvl(pos.sl, CSS.down, `Стоп ${axisFmt(sym,pos.sl)}`); lvl(pos.entry, CSS.muted, `Вход ${sideRu(pos.dir)}`);
@@ -252,14 +253,14 @@ function drawChart(){
   for (const nw of S.news){ if (nw.ts < firstT) continue; if (nw.coins && nw.coins.length && !nw.coins.includes(sym)) continue; const i = iOf(nw.ts); if (i<0 || i>=n) continue; (newsAt[i] ||= []).push(nw); }
   for (const [i, arr] of Object.entries(newsAt)){ const nw = arr[0]; x.save(); x.translate(X(+i), pT+4); x.rotate(Math.PI/4); x.fillStyle = nw.s>=0 ? CSS.up : CSS.down; x.globalAlpha = 0.45 + nw.rel*0.55; x.fillRect(-3.5,-3.5,7,7); x.restore(); }
   const last = cs[n-1], ly = Y(last.c);
-  x.setLineDash([2,3]); x.strokeStyle = 'rgba(235,232,247,.35)'; x.beginPath(); x.moveTo(pL, Math.round(ly)+0.5); x.lineTo(pL+plotW, Math.round(ly)+0.5); x.stroke(); x.setLineDash([]);
+  x.setLineDash([2,3]); x.strokeStyle = CSS.ref; x.beginPath(); x.moveTo(pL, Math.round(ly)+0.5); x.lineTo(pL+plotW, Math.round(ly)+0.5); x.stroke(); x.setLineDash([]);
   const lbl = axisFmt(sym, last.c); x.font = `600 11px ${font}`; const lw = x.measureText(lbl).width + 10;
-  x.fillStyle = last.c>=last.o ? '#1d5a3c' : '#6a2530'; x.fillRect(pL+plotW+3, ly-9, lw, 18);
+  x.fillStyle = last.c>=last.o ? CSS.up : CSS.down; x.fillRect(pL+plotW+3, ly-9, lw, 18);
   x.fillStyle = '#ffffff'; x.textAlign='left'; x.textBaseline='middle'; x.fillText(lbl, pL+plotW+8, ly);
   const tip = $('#tip');
   if (CH.hover && CH.hover.x >= pL && CH.hover.x <= pL+plotW){
     const i = clamp(Math.floor((CH.hover.x - pL)/step), 0, n-1); const k = cs[i];
-    x.strokeStyle = 'rgba(235,232,247,.35)'; x.lineWidth = 1; x.beginPath(); x.moveTo(Math.round(X(i))+0.5, pT); x.lineTo(Math.round(X(i))+0.5, pT+plotH); x.stroke();
+    x.strokeStyle = CSS.ref; x.lineWidth = 1; x.beginPath(); x.moveTo(Math.round(X(i))+0.5, pT); x.lineTo(Math.round(X(i))+0.5, pT+plotH); x.stroke();
     tip.innerHTML = '';
     const h = document.createElement('div'); h.className = 'h'; h.textContent = `${fmtTime(k.t, true)}${i===n-1?' · текущая свеча':''}`; tip.append(h);
     const row = (a,b,cls)=>{ const d = document.createElement('div'); d.className='r'; const s1 = document.createElement('span'); s1.textContent=a; const s2=document.createElement('span'); s2.textContent=b; if (cls) s2.className=cls; d.append(s1,s2); tip.append(d); };
@@ -315,7 +316,7 @@ function renderPortfolio(full){
     posBox.innerHTML = pf.positions.length ? `<table class="tbl"><thead><tr><th>Монета</th><th class="num">Вход → сейчас</th><th class="num">P&L</th><th></th></tr></thead><tbody>${pf.positions.map(p=>
       `<tr data-pid="${p.id}"><td><b class="mono">${p.sym}</b> <span class="side-pill ${p.dir>0?'l':'s'}">${sideRu(p.dir)}</span><br><small style="color:var(--faint)" data-f="lv"></small></td>
       <td class="num">${esc(fmtPrice(p.sym,p.entry))}<br><small style="color:var(--faint)" data-f="px"></small></td><td class="num" data-f="pnl"></td>
-      <td class="num"><button type="button" class="btn btn-sm" data-close="${p.id}" aria-label="Закрыть ${sideRu(p.dir)} ${p.sym}">Закрыть</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">Открытых позиций нет. Диана ждёт сигнал от Марка.</div>`;
+      <td class="num"><button type="button" class="btn btn-sm" data-close="${p.id}" aria-label="Закрыть ${sideRu(p.dir)} ${p.sym}">Закрыть</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">Открытых позиций нет. Виктор ждёт сигнал от Марка.</div>`;
   }
   for (const p of pf.positions){
     const tr = posBox.querySelector(`[data-pid="${p.id}"]`); if (!tr) continue;
@@ -339,7 +340,7 @@ function renderApproval(){
   const el = $('#approval');
   if (!S.pending.length){ el.hidden = true; el.innerHTML = ''; el._h = ''; return; }
   const more = S.pending.length - 2;
-  const h = `<h4><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>Диана ждёт решения</h4>` + S.pending.slice(0,2).map(pendMini).join('') + (more>0 ? `<div class="appr-more">Ещё ${more} — во вкладке «Портфель»</div>` : '');
+  const h = `<h4><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>Виктор ждёт решения</h4>` + S.pending.slice(0,2).map(pendMini).join('') + (more>0 ? `<div class="appr-more">Ещё ${more} — во вкладке «Портфель»</div>` : '');
   if (el._h !== h){ el._h = h; el.innerHTML = h; }
   el.hidden = false;
   el.onclick = e=>{ const ap = e.target.closest('[data-appr]'); if (ap){ approvePending(+ap.dataset.appr, ap.dataset.ok==='1'); ap.closest('.appr-row').style.opacity = .5; } };
@@ -356,17 +357,17 @@ function drawEquity(){
   const pL = 6, pR = 64, pT = 8, pB = 8, w = EQ.w-pL-pR, h = EQ.h-pT-pB;
   const X = i=>pL + i/(pts.length-1)*w, Y = v=>pT + (1-(v-lo)/(hi-lo))*h;
   x.font = `11px ${getComputedStyle(document.body).fontFamily}`; x.textBaseline = 'middle'; x.textAlign = 'left';
-  for (const v of niceTicks(lo, hi, 3)){ const yy = Math.round(Y(v))+0.5; x.strokeStyle='rgba(160,158,200,.09)'; x.beginPath(); x.moveTo(pL,yy); x.lineTo(pL+w,yy); x.stroke(); x.fillStyle = CSS.faint; x.fillText('$'+Math.round(v).toLocaleString('ru-RU'), pL+w+6, yy); }
-  const by = Math.round(Y(base))+0.5; x.setLineDash([3,3]); x.strokeStyle = 'rgba(235,232,247,.3)'; x.beginPath(); x.moveTo(pL,by); x.lineTo(pL+w,by); x.stroke(); x.setLineDash([]);
+  for (const v of niceTicks(lo, hi, 3)){ const yy = Math.round(Y(v))+0.5; x.strokeStyle=CSS.grid; x.beginPath(); x.moveTo(pL,yy); x.lineTo(pL+w,yy); x.stroke(); x.fillStyle = CSS.faint; x.fillText('$'+Math.round(v).toLocaleString('ru-RU'), pL+w+6, yy); }
+  const by = Math.round(Y(base))+0.5; x.setLineDash([3,3]); x.strokeStyle = CSS.ref; x.beginPath(); x.moveTo(pL,by); x.lineTo(pL+w,by); x.stroke(); x.setLineDash([]);
   const end = pts[pts.length-1].e, up = end >= base, col = up ? CSS.up : CSS.down;
   x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(X(i),Y(p.e)):x.moveTo(X(i),Y(p.e))); x.strokeStyle = col; x.lineWidth = 2; x.lineJoin='round'; x.stroke();
   x.lineTo(X(pts.length-1), pT+h); x.lineTo(X(0), pT+h); x.closePath();
-  const gr = x.createLinearGradient(0,pT,0,pT+h); gr.addColorStop(0, up?'rgba(79,209,139,.20)':'rgba(255,107,120,.20)'); gr.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = gr; x.fill();
-  x.beginPath(); x.arc(X(pts.length-1), Y(end), 3.5, 0, Math.PI*2); x.fillStyle = col; x.fill(); x.lineWidth = 2; x.strokeStyle = '#14172e'; x.stroke();
+  const gr = x.createLinearGradient(0,pT,0,pT+h); gr.addColorStop(0, up?alpha(CSS.up,.20):alpha(CSS.down,.20)); gr.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = gr; x.fill();
+  x.beginPath(); x.arc(X(pts.length-1), Y(end), 3.5, 0, Math.PI*2); x.fillStyle = col; x.fill(); x.lineWidth = 2; x.strokeStyle = CSS.panel; x.stroke();
   const tip = $('#eqtip');
   if (EQ.hover && EQ.hover.x>=pL && EQ.hover.x<=pL+w){
     const i = Math.round(clamp((EQ.hover.x-pL)/w,0,1)*(pts.length-1)); const p = pts[i];
-    x.strokeStyle='rgba(235,232,247,.35)'; x.lineWidth=1; x.beginPath(); x.moveTo(Math.round(X(i))+0.5,pT); x.lineTo(Math.round(X(i))+0.5,pT+h); x.stroke();
+    x.strokeStyle=CSS.ref; x.lineWidth=1; x.beginPath(); x.moveTo(Math.round(X(i))+0.5,pT); x.lineTo(Math.round(X(i))+0.5,pT+h); x.stroke();
     tip.innerHTML = ''; const hh = document.createElement('div'); hh.className='h'; hh.textContent = fmtTime(p.ts, true); const rr = document.createElement('div'); rr.className='r'; const a1=document.createElement('span'); a1.textContent='Капитал'; const a2=document.createElement('span'); a2.textContent=fmtUSD(p.e); rr.append(a1,a2); tip.append(hh, rr);
     tip.hidden = false; let tx = EQ.hover.x+12; if (tx+tip.offsetWidth > EQ.w) tx = EQ.hover.x - tip.offsetWidth - 12; tip.style.left = Math.max(0,tx)+'px'; tip.style.top = '6px';
   } else tip.hidden = true;
@@ -410,7 +411,7 @@ const CONTROLS = {
   nika:[{k:'rumorTrust', label:'Доверие к слухам', min:0.3, max:1.6, step:0.1, fmt:v=>`×${(+v).toFixed(1)}`, hint:'Вес новостей из источников с надёжностью ниже 50%.'}],
   boris:[{k:'riskPct', label:'Риск на сделку', min:0.25, max:3, step:0.25, fmt:v=>`${(+v).toFixed(2)}% капитала`, hint:'Сколько капитала теряется, если сработает стоп.'},
          {k:'rr', label:'Тейк к стопу', min:1.2, max:3.5, step:0.1, fmt:v=>`${(+v).toFixed(1)} : 1`, hint:'Во сколько раз цель дальше стопа.'}],
-  timur:[{k:'threshold', label:'Порог уверенности', min:40, max:85, step:1, fmt:v=>`${v}%`, hint:'Сигналы ниже порога до Дианы не доходят.'}],
+  timur:[{k:'threshold', label:'Порог уверенности', min:40, max:85, step:1, fmt:v=>`${v}%`, hint:'Сигналы ниже порога до Виктора не доходят.'}],
   aliya:[{k:'maxPos', label:'Максимум позиций', min:1, max:6, step:1, fmt:v=>String(v), hint:'Одновременно открытых сделок.'},
          {k:'dailyLimit', label:'Дневной лимит убытка', min:1, max:15, step:1, fmt:v=>`${v}%`, hint:'После него новые сделки до конца дня не открываются.'},
          {k:'timeStop', label:'Выход по времени', min:12, max:288, step:12, fmt:v=>`через ${v} свеч.`, hint:'Закрыть позицию, если за это время не сработали ни стоп, ни тейк.'},
@@ -423,11 +424,11 @@ function buildAgentPanel(){
     ? `<div class="ctl"><label for="p_${c.k}">${c.label}</label><label class="switch"><input type="checkbox" id="p_${c.k}" data-pk="${c.k}" ${S.params[c.k]?'checked':''}></label><div class="hint">${c.hint}</div></div>`
     : `<div class="ctl"><label for="p_${c.k}">${c.label}</label><output id="o_${c.k}">${c.fmt(S.params[c.k])}</output><input type="range" id="p_${c.k}" data-pk="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${S.params[c.k]}"><div class="hint">${c.hint}</div></div>`).join('');
   const quick = {nika:['Что сейчас на рынке?','Какой новости ты не доверяешь?','Какая монета самая горячая?'], boris:['Какие риски видишь?','Почему отклонил последнюю идею?','Не перегружен ли портфель?'], timur:['Почему такой сигнал?','Что нужно для сигнала по BTC?','Какой порог ты бы поставил?'], aliya:['Как дела у счёта?','Что с открытыми позициями?','Какая сделка была лучшей?']}[id];
-  const acc = {nika:'Леона', boris:'Генри', timur:'Марка', aliya:'Диану'}[id], ins = {nika:'Леоном', boris:'Генри', timur:'Марком', aliya:'Дианой'}[id];
+  const acc = {nika:'Леона', boris:'Генри', timur:'Марка', aliya:'Виктора'}[id], ins = {nika:'Леоном', boris:'Генри', timur:'Марком', aliya:'Виктором'}[id];
   const ai = CFGC.ai
     ? `<div class="chat" id="chatLog"></div><div class="quick" id="quick">${quick.map(q=>`<button type="button">${esc(q)}</button>`).join('')}</div><form class="chatform" id="chatForm"><input id="chatIn" aria-label="Вопрос агенту" type="text" maxlength="400" placeholder="Спросите ${acc} о работе" autocomplete="off"><button class="btn btn-accent" type="submit" id="chatSend">Спросить</button></form>`
     : `<div class="ainote">Разговор с агентом включится, когда на сервере будет задан ANTHROPIC_API_KEY.</div>`;
-  el.innerHTML = `<div class="ahead" style="--c:${a.color}"><img class="ava" alt="" src="${AVA[id]}"><div><h2>${a.name}</h2><p class="role">${a.role}</p><p class="now" id="aNow">${esc(a.status)}</p></div></div>
+  el.innerHTML = `<div class="ahead" style="--c:${a.color}"><img class="ava" alt="" data-aid="${id}" src="${AVA[id]}"><div><h2>${a.name}</h2><p class="role">${a.role}</p><p class="now" id="aNow">${esc(a.status)}</p></div></div>
     <ul class="duties">${a.duties.map(d=>`<li>${d}</li>`).join('')}</ul>
     <div class="kgrid" id="aK" style="margin-top:10px"></div>
     <div class="sec">Настройки<span class="note" id="profNote">профиль: ${S.profile==='custom'?'свой':(PROFILES[S.profile]||{label:''}).label.toLowerCase()}</span></div>${ctl}
@@ -454,7 +455,7 @@ function updateAgentPanel(){
 }
 function renderChat(id){
   const log = $('#chatLog'); if (!log) return; const a = AG[id];
-  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Генри. Считаю риски и режу лишнее. Спрашивайте.', timur:'Марк на связи. Могу объяснить любой сигнал и порог.', aliya:'Диана. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
+  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Генри. Считаю риски и режу лишнее. Спрашивайте.', timur:'Марк на связи. Могу объяснить любой сигнал и порог.', aliya:'Виктор. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
   log.innerHTML = CHATS[id].map(m=>`<div class="bub ${m.role==='user'?'me':'ai'}${m.err?' err':''}" style="--c:${a.color}">${esc(m.content)}</div>`).join('');
 }
 function sendChat(id, text){

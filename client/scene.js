@@ -14,23 +14,23 @@ const LOGO_IMG = new Image(); LOGO_IMG.onload = ()=>{ LY.cw = -1; }; LOGO_IMG.sr
 
 // ---------- агенты ----------
 const AGENT_DEFS = [
-  {id:'nika',  name:'Леон',  role:'Аналитик трендов и новостей', short:'Тренды и новости', color:'#e06a22',
-   look:{skin:'#f0c4a0', hair:'#5a3825', hairL:'#8a5a3c', shirt:'#d9682a', shirtL:'#f08d55', shirtD:'#a94c18', pants:'#2f3a55', shoes:'#3a2418', iris:'#5a3a22', style:'crop', acc:'phones', mug:'#f2ede4'},
+  {id:'nika',  name:'Леон',  role:'Аналитик трендов и новостей', short:'Тренды и новости', color:'#d4573a',
+   look:{skin:'#e9b48e', hair:'#4a2e1e', hairL:'#6b4630', shirt:'#7c1f2c', shirtL:'#9a3141', shirtD:'#5a1520', pants:'#34312f', shoes:'#2a2420', iris:'#4a2e1e', style:'short', acc:'', mug:'#f2ede4'},
    duties:['Следит за ценами, объёмами и трендами шести монет','Читает новости и оценивает надёжность источника','Каждые несколько свечей собирает сводку и отдаёт Генри']},
   {id:'boris', name:'Генри', role:'Риск-менеджер сделок',        short:'Сделки и риски',   color:'#1f9e98',
-   look:{skin:'#efc19c', hair:'#c8c3cf', hairL:'#ebe8ef', shirt:'#f2f3f7', shirtL:'#ffffff', shirtD:'#c4c8d6', pants:'#4a4f68', shoes:'#2e2622', iris:'#3f6f8a', style:'bald', acc:'glasses', tie:'#1f9e98', mug:'#3a6b8c'},
+   look:{skin:'#d9a07a', hair:'#3a2a20', hairL:'#5a4434', shirt:'#24252c', shirtL:'#383943', shirtD:'#15161b', pants:'#1c1d22', shoes:'#121214', iris:'#3a2a20', style:'bald', acc:'', mug:'#e8e2d8'},
    duties:['Оценивает перспективные идеи из сводки Леона','Считает стоп, тейк и размер позиции от капитала','Режет идеи с перегревом, слухами и перегрузом портфеля']},
-  {id:'timur', name:'Марк', role:'Стратег сигналов',             short:'Сигналы',          color:'#6f80ea',
-   look:{skin:'#c58e66', hair:'#24212b', hairL:'#3b3644', shirt:'#7383ec', shirtL:'#9aa6f6', shirtD:'#4d5cc2', pants:'#2e3044', shoes:'#1f1f28', iris:'#3b2618', style:'short', acc:'cap', cap:'#283063', capL:'#3c4790', mug:'#e8c24a'},
+  {id:'timur', name:'Марк', role:'Стратег сигналов',             short:'Сигналы',          color:'#d9a21b',
+   look:{skin:'#e3b08c', hair:'#1d1612', hairL:'#3a2c22', shirt:'#d2a01e', shirtL:'#e9bd45', shirtD:'#a67c10', pants:'#c99a1c', shoes:'#1a1a1e', iris:'#3b2618', style:'short', acc:'glasses', mug:'#f5f1ea'},
    duties:['Сводит тренд, новости и риск в уверенность сигнала','Пропускает к трейдеру только сигналы выше порога','Даёт команду закрыть позицию, если картина развернулась']},
-  {id:'aliya', name:'Диана',  role:'Трейдер-исполнитель',          short:'Сделки',           color:'#e8487c',
-   look:{skin:'#e4ad88', hair:'#221a24', hairL:'#463846', shirt:'#ea4f82', shirtL:'#f77ea4', shirtD:'#b8305f', pants:'#2e2a3a', shoes:'#4a2030', iris:'#4a2a1c', style:'long', acc:'earrings', mug:'#ffffff'},
+  {id:'aliya', name:'Виктор',  role:'Трейдер-исполнитель',          short:'Сделки',           color:'#6e7cf0',
+   look:{skin:'#eab896', hair:'#8a5d3b', hairL:'#a8774f', shirt:'#d9cebc', shirtL:'#eee6d8', shirtD:'#b4a68f', pants:'#24304f', shoes:'#f2f2f2', iris:'#4a5a6a', style:'short', acc:'', mug:'#ffffff'},
    duties:['Открывает и закрывает позиции на демо-счёте','Ставит стоп-лосс и тейк-профит, переносит стоп в безубыток','Соблюдает лимит позиций и дневной лимит убытка']},
 ];
 const AG = {};
 AGENT_DEFS.forEach((d,i)=>{
   const dx = DX[i];
-  AG[d.id] = Object.assign({}, d, {fem: d.id==='aliya', i, dx, sx:dx+40, ax:dx+75, x:dx+40, y:SEAT_Y, facing:'SW', seated:true, actions:[], queue:[], job:null,
+  AG[d.id] = Object.assign({}, d, {fem: false, i, dx, sx:dx+40, ax:dx+75, x:dx+40, y:SEAT_Y, facing:'SW', seated:true, actions:[], queue:[], job:null,
     status:'На месте', bubble:null, emote:null, typing:false, phase:0, jumpT:0, armsUp:0, idle:0, nextIdle:rnd(8,18), cup:i!==3, holdCup:false, carry:false,
     plan:{x:dx+40, y:SEAT_Y}, exitPath:null, blinkAt:rnd(1,4), walkStatus:null});
 });
@@ -133,8 +133,8 @@ function startJob(a, job){
       for (const r of out) if (!r.silent) post('aliya', null, r.text, r.kind==='queued'?'signal':'trade');
       const main = out.find(r=>r.kind==='open') || out.find(r=>r.kind==='close') || out[0];
       if (main){
-        if (main.kind==='open'){ say(a, `Открыла ${sideRu(main.pos.dir)} ${main.pos.sym}`, 2.6); emote(a,'!',1); }
-        else if (main.kind==='close'){ say(a, `Закрыла ${main.c.sym}: ${fmtUSD(main.c.pnl,true)}`, 2.8); react(a, main.c); }
+        if (main.kind==='open'){ say(a, `Открыл ${sideRu(main.pos.dir)} ${main.pos.sym}`, 2.6); emote(a,'!',1); }
+        else if (main.kind==='close'){ say(a, `Закрыл ${main.c.sym}: ${fmtUSD(main.c.pnl,true)}`, 2.8); react(a, main.c); }
         else if (main.kind==='queued'){ say(a, 'Жду вашего решения', 2.8); }
         else say(a, main.text.replace(/^Пропускаю /,'Пропуск: ').slice(0,46), 2.6);
       }
@@ -255,7 +255,10 @@ function resetScene(){
 // ================= ОТРИСОВКА =================
 let LY = {cw:0, ch:0, dpr:1, s:1, ox:0, oy:0};
 let STATIC = null, SPRITES = [], HITS = [];
-function P(X, Y, Z=0){ return [LY.ox + (X-Y)*LY.s, LY.oy + (X+Y)*LY.s*0.5 - Z*LY.s]; }
+let PROJ3 = null;
+let DAYLIGHT = document.documentElement.getAttribute('data-theme') !== 'dark';
+function setSceneDaylight(day){ DAYLIGHT = !!day; LY.cw = -1; if (typeof O3 !== 'undefined' && O3.setDay) O3.setDay(DAYLIGHT); }
+function P(X, Y, Z=0){ if (PROJ3) return PROJ3(X, Y, Z); return [LY.ox + (X-Y)*LY.s, LY.oy + (X+Y)*LY.s*0.5 - Z*LY.s]; }
 
 // цвета
 function hx(c){ c = c.replace('#',''); if (c.length===3) c = c.split('').map(x=>x+x).join(''); const n = parseInt(c,16); return [n>>16&255, n>>8&255, n&255]; }
@@ -338,7 +341,7 @@ function buildStatic(){
   STATIC = document.createElement('canvas'); STATIC.width = Math.round(cw*dpr); STATIC.height = Math.round(ch*dpr);
   const c = STATIC.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
   const bgG = c.createRadialGradient(cw*0.5, ch*0.55, 10, cw*0.5, ch*0.55, Math.max(cw,ch)*0.75);
-  bgG.addColorStop(0,'#26304f'); bgG.addColorStop(1,'#11152a'); c.fillStyle = bgG; c.fillRect(0,0,cw,ch);
+  if (DAYLIGHT){ bgG.addColorStop(0,'#f4f6fa'); bgG.addColorStop(1,'#dbe2ec'); } else { bgG.addColorStop(0,'#26304f'); bgG.addColorStop(1,'#11152a'); } c.fillStyle = bgG; c.fillRect(0,0,cw,ch);
   c.save(); c.shadowColor='rgba(3,4,12,.65)'; c.shadowBlur = 40*s/1.2; c.shadowOffsetY = 18*s/1.2;
   poly(c, [P(-WT,-WT,-SLAB),P(FW,-WT,-SLAB),P(FW,FD,-SLAB),P(-WT,FD,-SLAB)]); c.fillStyle='#000'; c.fill(); c.restore();
   // плита: тёмное дерево
@@ -403,7 +406,7 @@ function buildStatic(){
   c.save(); planeY(c, 124, 0, 80); c.shadowColor='rgba(0,0,0,.4)'; c.shadowBlur = 5*s; c.shadowOffsetY = 2*s; rrect(c, 0, 0, 40, 46, 2); const fr = c.createLinearGradient(0,0,0,46); fr.addColorStop(0,'#d8b25a'); fr.addColorStop(1,'#8a6a2a'); c.fillStyle = fr; c.fill(); c.shadowColor='transparent';
   rrect(c, 2.2, 2.2, 35.6, 41.6, 1.2); c.fillStyle = '#21402f'; c.fill();
   c.fillStyle = 'rgba(255,255,255,.04)'; for (let i=0;i<60;i++) c.fillRect(3+((i*37)%34), 3+((i*23)%39), 0.6, 0.6);
-  c.font = `700 4px "Golos Text", sans-serif`; c.fillStyle = '#d9b867'; c.fillText('СИГНАЛЫ', 9, 7.5); c.restore();
+  c.font = `700 4px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`; c.fillStyle = '#d9b867'; c.fillText('СИГНАЛЫ', 9, 7.5); c.restore();
   // часы в латуни
   c.save(); planeY(c, 300, 0, 76); c.shadowColor='rgba(0,0,0,.45)'; c.shadowBlur = 5*s; c.shadowOffsetY = 2*s; c.beginPath(); c.arc(12, 12, 11.2, 0, Math.PI*2);
   const brass = c.createLinearGradient(0, 0, 24, 24); brass.addColorStop(0,'#ecd08a'); brass.addColorStop(1,'#8a6a2a'); c.fillStyle = brass; c.fill(); c.shadowColor='transparent';
@@ -439,18 +442,20 @@ function drawWindow(c, u0, u1, z0, z1, tower){
   c.save(); planeY(c, u0, 0, z1);
   c.shadowColor='rgba(0,0,0,.4)'; c.shadowBlur = 4*s; c.shadowOffsetY = 2*s;
   rrect(c, -3, -3, w+6, h+6, 1.5); c.fillStyle = '#4a2618'; c.fill(); c.shadowColor='transparent';
-  const g = c.createLinearGradient(0,0,0,h); g.addColorStop(0,'#24305e'); g.addColorStop(0.55,'#6e4f84'); g.addColorStop(0.85,'#d98c62'); g.addColorStop(1,'#f2bd7c');
+  const g = c.createLinearGradient(0,0,0,h);
+  if (DAYLIGHT){ g.addColorStop(0,'#5aa2e6'); g.addColorStop(0.6,'#9fcdf2'); g.addColorStop(1,'#dcefff'); } else { g.addColorStop(0,'#24305e'); g.addColorStop(0.55,'#6e4f84'); g.addColorStop(0.85,'#d98c62'); g.addColorStop(1,'#f2bd7c'); }
   c.fillStyle = g; c.fillRect(0,0,w,h);
-  c.fillStyle = 'rgba(255,255,255,.75)'; for (let i=0;i<10;i++) c.fillRect(((i*31+u0)%w), ((i*17)%(h*0.35)), 0.6, 0.6);
-  if (!tower){ c.beginPath(); c.arc(w*0.24, h*0.2, 4.2, 0, Math.PI*2); c.fillStyle = '#fff4d6'; c.fill(); c.beginPath(); c.arc(w*0.24+1.8, h*0.2-0.9, 3.6, 0, Math.PI*2); c.fillStyle = '#2c3566'; c.fill(); }
+  if (DAYLIGHT){ c.fillStyle = 'rgba(255,255,255,.85)'; for (const [cx, cy, r] of [[w*0.2,h*0.15,3.2],[w*0.2+3,h*0.15+0.6,2.5],[w*0.62,h*0.1,2.6],[w*0.62+2.6,h*0.1+0.5,2]]){ c.beginPath(); c.arc(cx, cy, r, 0, Math.PI*2); c.fill(); } }
+  else { c.fillStyle = 'rgba(255,255,255,.75)'; for (let i=0;i<10;i++) c.fillRect(((i*31+u0)%w), ((i*17)%(h*0.35)), 0.6, 0.6); }
+  if (!tower && !DAYLIGHT){ c.beginPath(); c.arc(w*0.24, h*0.2, 4.2, 0, Math.PI*2); c.fillStyle = '#fff4d6'; c.fill(); c.beginPath(); c.arc(w*0.24+1.8, h*0.2-0.9, 3.6, 0, Math.PI*2); c.fillStyle = '#2c3566'; c.fill(); }
   let bx = 0, seed = tower ? 11 : 3;
   while (bx < w){
     seed = (seed*9301+49297)%233280; const bw = 5 + seed%8; seed = (seed*9301+49297)%233280; const bh = 9 + seed%(h*0.5|0);
-    c.fillStyle = (seed%2) ? '#352a52' : '#3f3060'; c.fillRect(bx, h-bh, bw, bh);
-    for (let wy=h-bh+2.5; wy<h-1.5; wy+=3) for (let wx=bx+1.2; wx<bx+bw-1.2; wx+=2.2){ seed=(seed*9301+49297)%233280; if (seed%4===0){ c.fillStyle = seed%3 ? '#ffd27a' : '#ffe9b8'; c.fillRect(wx, wy, 1, 1.2); } }
+    c.fillStyle = DAYLIGHT ? ((seed%2) ? '#a9b9cc' : '#c3ccd8') : ((seed%2) ? '#352a52' : '#3f3060'); c.fillRect(bx, h-bh, bw, bh);
+    for (let wy=h-bh+2.5; wy<h-1.5; wy+=3) for (let wx=bx+1.2; wx<bx+bw-1.2; wx+=2.2){ seed=(seed*9301+49297)%233280; if (DAYLIGHT){ c.fillStyle = 'rgba(255,255,255,.35)'; c.fillRect(wx, wy, 1, 1.2); } else if (seed%4===0){ c.fillStyle = seed%3 ? '#ffd27a' : '#ffe9b8'; c.fillRect(wx, wy, 1, 1.2); } }
     bx += bw + 0.8;
   }
-  if (tower){ const tx = w*0.62; c.fillStyle = '#261d3d'; c.fillRect(tx-0.7, 6, 1.4, h-6); c.beginPath(); c.moveTo(tx-3.5,h); c.lineTo(tx-0.8,h*0.45); c.lineTo(tx+0.8,h*0.45); c.lineTo(tx+3.5,h); c.fill(); c.beginPath(); c.ellipse(tx, h*0.36, 3.2, 2.2, 0, 0, Math.PI*2); c.fill(); }
+  if (tower){ const tx = w*0.62; c.fillStyle = DAYLIGHT ? '#7d8aa0' : '#261d3d'; c.fillRect(tx-0.7, 6, 1.4, h-6); c.beginPath(); c.moveTo(tx-3.5,h); c.lineTo(tx-0.8,h*0.45); c.lineTo(tx+0.8,h*0.45); c.lineTo(tx+3.5,h); c.fill(); c.beginPath(); c.ellipse(tx, h*0.36, 3.2, 2.2, 0, 0, Math.PI*2); c.fill(); }
   // переплёт из тёмного дерева
   c.fillStyle = '#4a2618'; c.fillRect(w/2-1.1, 0, 2.2, h); c.fillRect(0, h*0.5, w, 1.8);
   c.fillStyle = 'rgba(0,0,0,.25)'; for (const fx of [w*0.25, w*0.75]) c.fillRect(fx-0.4, 0, 0.8, h); c.fillRect(0, h*0.25, w, 0.7); c.fillRect(0, h*0.75, w, 0.7);
@@ -498,7 +503,7 @@ function drawDesk(c, i){
   // латунная табличка с именем
   c.save(); planeY(c, x+26, y+DESK_D-2.2, 15.5); rrect(c, 0, 0, 22, 6.2, 1); const pg = c.createLinearGradient(0,0,0,6.2); pg.addColorStop(0,'#ecd08a'); pg.addColorStop(1,'#a8843a'); c.fillStyle = pg; c.fill();
   c.fillStyle = a.color; c.beginPath(); c.arc(2.6, 3.1, 1.15, 0, Math.PI*2); c.fill();
-  c.font = `700 4.1px "Golos Text", sans-serif`; c.fillStyle = '#2a1a10'; c.textBaseline='middle'; c.fillText(a.name, 5, 3.3); c.restore();
+  c.font = `700 4.1px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`; c.fillStyle = '#2a1a10'; c.textBaseline='middle'; c.fillText(a.name, 5, 3.3); c.restore();
   // банкирская лампа
   const lx = x+55, ly = y+6;
   disc(c, lx, ly, DESK_H, 3.2, '#8a6a2a'); cyl(c, lx, ly, DESK_H, 2.8, 1, '#b8913f');
@@ -691,7 +696,7 @@ function drawWallDynamic(c, t){
   c.strokeStyle = 'rgba(160,170,230,.10)'; c.lineWidth = 0.4; for (let gy=18; gy<54; gy+=9){ c.beginPath(); c.moveTo(4,gy); c.lineTo(120,gy); c.stroke(); }
   cs.forEach((k,i)=>{ const xx = 6 + i*3.1, up = k.c>=k.o; c.fillStyle = up ? '#4fd18b' : '#ff6b78'; c.fillRect(xx+0.8, yv(k.h), 0.5, Math.max(0.5, yv(k.l)-yv(k.h))); const y1 = yv(Math.max(k.o,k.c)), y2 = yv(Math.min(k.o,k.c)); c.fillRect(xx, y1, 2.1, Math.max(0.6, y2-y1)); });
   for (const pos of S.pf.positions.filter(p=>p.sym===sym)){ const yy = yv(clamp(pos.entry,lo,hi)); c.setLineDash([1.5,1.2]); c.strokeStyle = '#ffb547'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(4,yy); c.lineTo(120,yy); c.stroke(); c.setLineDash([]); }
-  c.font = `700 5.4px "Golos Text", sans-serif`; c.fillStyle = '#dfe3ff'; c.textBaseline = 'top'; c.fillText(`${sym}/USDT`, 6, 5.5);
+  c.font = `700 5.4px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`; c.fillStyle = '#dfe3ff'; c.textBaseline = 'top'; c.fillText(`${sym}/USDT`, 6, 5.5);
   const pp = st.price, ps = pp>=1000? pp.toFixed(1) : pp>=10? pp.toFixed(2) : pp>=1? pp.toFixed(3) : pp.toFixed(4);
   c.textAlign = 'right'; c.fillStyle = '#ffffff'; c.fillText(ps, 118, 5.5); c.textAlign = 'left';
   c.restore();
@@ -704,8 +709,8 @@ function drawWallDynamic(c, t){
     c.fillStyle = '#f3ead6'; c.fillRect(-7,-6.5,14,13); c.shadowColor='transparent';
     c.fillStyle = col; c.fillRect(-7,-6.5,14,2.2);
     c.fillStyle = '#c9a24e'; c.beginPath(); c.arc(0,-5.4,0.9,0,Math.PI*2); c.fill();
-    c.font = `700 4px "Golos Text", sans-serif`; c.fillStyle = '#2a1f1a'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(sg.sym, 0, -0.6);
-    c.font = `700 3.4px "Golos Text", sans-serif`; c.fillStyle = sg.type==='close' ? '#6b6250' : sg.dir>0 ? '#1d6b3e' : '#8a1f2b'; c.fillText(sg.type==='close' ? 'закрыть' : (sg.dir>0?'▲ лонг':'▼ шорт'), 0, 3.6);
+    c.font = `700 4px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`; c.fillStyle = '#2a1f1a'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(sg.sym, 0, -0.6);
+    c.font = `700 3.4px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`; c.fillStyle = sg.type==='close' ? '#6b6250' : sg.dir>0 ? '#1d6b3e' : '#8a1f2b'; c.fillText(sg.type==='close' ? 'закрыть' : (sg.dir>0?'▲ лонг':'▼ шорт'), 0, 3.6);
     c.restore();
   });
   c.restore();
@@ -909,7 +914,7 @@ function drawEmote(c, a, t, sx, sy){
   const col = kind==='$' ? '#f6c54a' : kind==='!' ? '#ffb547' : kind==='z' ? '#b9bce0' : '#ffffff';
   c.beginPath(); c.arc(0, 0, 4.4*s, 0, Math.PI*2); c.fillStyle = col; c.fill(); c.shadowColor='transparent';
   if (kind==='$'){ c.beginPath(); c.arc(0,0,3.4*s,0,Math.PI*2); c.strokeStyle = '#d99b1f'; c.lineWidth = 0.6*s; c.stroke(); }
-  c.font = `800 ${(kind==='z'?5:6)*s}px "Golos Text", sans-serif`; c.fillStyle = kind==='$' ? '#8a5a00' : '#2a1d2e'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = `800 ${(kind==='z'?5:6)*s}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`; c.fillStyle = kind==='$' ? '#8a5a00' : '#2a1d2e'; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillText(kind==='z' ? 'Zz' : kind, 0, 0.4*s);
   c.restore();
 }
@@ -1033,7 +1038,7 @@ function renderOverlay(ctx, s, cw, chh){
   const fs = Math.round(clamp(s*9.6, 11, 14));
   ctx.textBaseline = 'top'; ctx.textAlign = 'left';
   const maxW = Math.min(190, Math.max(110, 70*s));
-  ctx.font = `600 ${fs}px "Golos Text", system-ui, sans-serif`;
+  ctx.font = `600 ${fs}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif`;
   const placed = [];
   const order = AG_LIST.filter(a=>a.bubble).sort((p,q)=>q.bubble.t0-p.bubble.t0);
   for (const a of order){
@@ -1064,7 +1069,7 @@ function renderOverlay(ctx, s, cw, chh){
   const sA = AG[selectedAgent];
   if (sA){ const [mx, my0] = P(sA.x, sA.y, 62); const my = my0 - 4 + (REDUCED?0:Math.sin(t*4)*2); if (!sA.bubble){ ctx.fillStyle = '#ffb547'; ctx.beginPath(); ctx.moveTo(mx-6,my-8); ctx.lineTo(mx+6,my-8); ctx.lineTo(mx,my); ctx.closePath(); ctx.fill(); } }
   if (SIM.paused){
-    const fz = Math.round(clamp(s*14, 16, 26)); ctx.font = `700 ${fz}px "Golos Text", sans-serif`; ctx.textAlign = 'center';
+    const fz = Math.round(clamp(s*14, 16, 26)); ctx.font = `700 ${fz}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`; ctx.textAlign = 'center';
     const tw = ctx.measureText('Пауза').width + 36;
     ctx.fillStyle = 'rgba(28,24,48,.82)'; rrect(ctx, cw/2 - tw/2, chh*0.06, tw, fz+18, (fz+18)/2); ctx.fill();
     ctx.fillStyle = '#ffb547'; ctx.fillText('Пауза', cw/2, chh*0.06+9); ctx.textAlign = 'left';

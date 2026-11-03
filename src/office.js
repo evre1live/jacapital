@@ -1,4 +1,4 @@
-// Офис: состояние, конвейер Леон → Генри → Марк → Диана, сделки, сохранение, Claude
+// Офис: состояние, конвейер Леон → Генри → Марк → Виктор, сделки, сохранение, Claude
 import fs from 'node:fs';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
@@ -10,7 +10,7 @@ const AGENTS = {
   nika:  {name: 'Леон',  role: 'аналитик трендов и новостей', persona: 'энергичный и любопытный, всегда называет источник новости и его надёжность'},
   boris: {name: 'Генри', role: 'риск-менеджер сделок',        persona: 'осторожный педант с сухим юмором, мыслит стопами и размером риска'},
   timur: {name: 'Марк', role: 'стратег сигналов',            persona: 'уверенный, говорит процентами уверенности и порогами'},
-  aliya: {name: 'Диана',  role: 'трейдер-исполнитель',         persona: 'собранная и лаконичная, отчитывается ордерами и результатом в долларах'},
+  aliya: {name: 'Виктор',  role: 'трейдер-исполнитель',         persona: 'собранный и лаконичный, отчитывается ордерами и результатом в долларах'},
 };
 
 function freshState(CFG){
@@ -88,7 +88,7 @@ export class Office extends EventEmitter {
       const atr = B.indicators(c).atr; const stop = 1.6 * atr;
       pf.positions.push({id: this.ctx.id(), sym: c.sym, symbol: c.symbol, dir: lp.dir, qty: lp.qty, entry: lp.entry, sl: lp.entry - lp.dir * stop, tp: lp.entry + lp.dir * stop * this.state.params.rr, stop, ts: Date.now(), riskUSD: lp.qty * stop, conf: 0, fees: 0, be: false, adopted: true});
       pf.cash -= lp.entry * lp.qty;
-      this.post('aliya', null, `Нашла на бирже открытую позицию ${sideRu(lp.dir)} ${c.sym} ${fmtQty(lp.qty, lp.entry)} @ ${fmtPrice(lp.entry)} — взяла под контроль со стопом и тейком.`, 'trade');
+      this.post('aliya', null, `Нашёл на бирже открытую позицию ${sideRu(lp.dir)} ${c.sym} ${fmtQty(lp.qty, lp.entry)} @ ${fmtPrice(lp.entry)} — взяла под контроль со стопом и тейком.`, 'trade');
     }
     this.touch();
   }
@@ -134,8 +134,8 @@ export class Office extends EventEmitter {
       const main = out.find(r => r.kind === 'open') || out.find(r => r.kind === 'close') || out.find(r => !r.silent) || out[0];
       let say = 'Готово', react = null;
       if (main){
-        if (main.kind === 'open') say = `Открыла ${sideRu(main.pos.dir)} ${main.pos.sym}`;
-        else if (main.kind === 'close'){ say = `Закрыла ${main.c.sym}: ${fmtUSD(main.c.pnl, true)}`; react = main.c.pnl; }
+        if (main.kind === 'open') say = `Открыл ${sideRu(main.pos.dir)} ${main.pos.sym}`;
+        else if (main.kind === 'close'){ say = `Закрыл ${main.c.sym}: ${fmtUSD(main.c.pnl, true)}`; react = main.c.pnl; }
         else if (main.kind === 'queued') say = 'Жду вашего решения';
         else say = main.text.replace(/^Пропускаю /, 'Пропуск: ').slice(0, 46);
       }
@@ -159,7 +159,7 @@ export class Office extends EventEmitter {
     for (const s of sigs.filter(x => x.type === 'close')){
       const pos = st.pf.positions.find(x => x.id === s.posId); if (!pos) continue;
       const c = await this.closePosition(pos, 'сигнал развернулся');
-      if (c) out.push({kind: 'close', c, text: `Закрыла ${sideRu(c.dir)} ${c.sym}: ${fmtUSD(c.pnl, true)} (${fmtPct(c.pct)}).`});
+      if (c) out.push({kind: 'close', c, text: `Закрыл ${sideRu(c.dir)} ${c.sym}: ${fmtUSD(c.pnl, true)} (${fmtPct(c.pct)}).`});
     }
     for (const s of sigs.filter(x => x.type === 'open')){
       if (!st.auto && !approved){
@@ -193,7 +193,7 @@ export class Office extends EventEmitter {
     const ex = pf.positions.find(x => x.sym === sig.sym);
     if (ex && ex.dir === sig.dir) return res('skip', `Пропускаю ${sideRu(sig.dir)} ${sig.sym}: уже в позиции.`);
     let pre = '';
-    if (ex){ const c = await this.closePosition(ex, 'разворот сигнала'); if (!c) return res('skip', `Не удалось закрыть ${ex.sym} перед разворотом.`); pre = `Закрыла ${sideRu(ex.dir)} ${ex.sym} (${fmtUSD(c.pnl, true)}). `; }
+    if (ex){ const c = await this.closePosition(ex, 'разворот сигнала'); if (!c) return res('skip', `Не удалось закрыть ${ex.sym} перед разворотом.`); pre = `Закрыл ${sideRu(ex.dir)} ${ex.sym} (${fmtUSD(c.pnl, true)}). `; }
     if (pf.positions.length >= p.maxPos) return res('skip', pre + `Пропускаю ${sideRu(sig.dir)} ${sig.sym}: лимит ${p.maxPos} поз.`);
     if (sig.dir < 0 && (!p.shorts || this.CFG.marketType === 'spot')) return res('skip', pre + `Пропускаю SHORT ${sig.sym}: шорты выключены.`);
     const coin = this.market.coins[sig.sym]; const px = coin.price;
@@ -210,7 +210,7 @@ export class Office extends EventEmitter {
     st.stats.aliya.orders++;
     st.orders = [{ts: Date.now(), text: `${sideRu(pos.dir)} ${pos.sym} ${fmtQty(pos.qty, pos.entry)} @ ${fmtPrice(pos.entry)}`}, ...st.orders].slice(0, 30);
     this.emit('open', pos);
-    return {kind: 'open', pos, text: pre + `Открыла ${sideRu(pos.dir)} ${pos.sym}: ${fmtQty(pos.qty, pos.entry)} @ ${fmtPrice(pos.entry)}. Стоп ${fmtPrice(pos.sl)}, тейк ${fmtPrice(pos.tp)}.`};
+    return {kind: 'open', pos, text: pre + `Открыл ${sideRu(pos.dir)} ${pos.sym}: ${fmtQty(pos.qty, pos.entry)} @ ${fmtPrice(pos.entry)}. Стоп ${fmtPrice(pos.sl)}, тейк ${fmtPrice(pos.tp)}.`};
   }
   async closePosition(pos, reason){
     if (pos.closing) return null; pos.closing = true;
@@ -258,9 +258,9 @@ export class Office extends EventEmitter {
     for (const pos of [...pf.positions]){
       if (pos.closing) continue;
       const px = this.price(pos.sym); const gain = (px - pos.entry) * pos.dir;
-      if (!pos.be && gain >= pos.stop){ pos.sl = pos.entry + pos.dir * pos.stop * 0.15; pos.be = true; this.post('aliya', null, `Перенесла стоп ${pos.sym} в безубыток.`, 'trade', {sym: pos.sym}); }
+      if (!pos.be && gain >= pos.stop){ pos.sl = pos.entry + pos.dir * pos.stop * 0.15; pos.be = true; this.post('aliya', null, `Перенёс стоп ${pos.sym} в безубыток.`, 'trade', {sym: pos.sym}); }
       if (gain >= pos.stop * 1.6){ const atr = B.indicators(this.market.coins[pos.sym]).atr; const ns = px - pos.dir * 1.1 * atr; if ((ns - pos.sl) * pos.dir > 0) pos.sl = ns; }
-      if (Date.now() - pos.ts >= p.timeStop * tf){ const c = await this.closePosition(pos, 'по времени'); if (c){ this.post('aliya', null, `Закрыла по времени: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)}.`, 'trade'); this.emit('react', {agent: 'aliya', say: `Выход по времени ${c.sym}`, pnl: c.pnl}); } }
+      if (Date.now() - pos.ts >= p.timeStop * tf){ const c = await this.closePosition(pos, 'по времени'); if (c){ this.post('aliya', null, `Закрыл по времени: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)}.`, 'trade'); this.emit('react', {agent: 'aliya', say: `Выход по времени ${c.sym}`, pnl: c.pnl}); } }
     }
     const before = st.pending.length; st.pending = st.pending.filter(x => x.expiresAt > Date.now());
     if (before !== st.pending.length) this.emit('pending');
@@ -281,7 +281,7 @@ export class Office extends EventEmitter {
     else return;
     st.profile = 'custom'; this.touch();
   }
-  setAuto(v){ this.state.auto = !!v; this.post('system', null, v ? 'Автосделки включены: Диана исполняет сигналы сама.' : 'Ручной режим: Диана будет ждать вашего подтверждения по каждой сделке.', 'system'); this.touch(); }
+  setAuto(v){ this.state.auto = !!v; this.post('system', null, v ? 'Автосделки включены: Виктор исполняет сигналы сама.' : 'Ручной режим: Виктор будет ждать вашего подтверждения по каждой сделке.', 'system'); this.touch(); }
   setTrading(v){ this.state.tradingOn = !!v; this.post('system', null, v ? 'Торговля включена.' : 'Торговля на паузе: новые сделки не открываются, стопы и тейки по открытым позициям работают.', 'system'); this.touch(); }
   async approve(id, ok){
     const st = this.state; const p = st.pending.find(x => x.id === id); if (!p) return;
@@ -293,7 +293,7 @@ export class Office extends EventEmitter {
   async manualClose(id){
     const pos = this.state.pf.positions.find(p => p.id === id); if (!pos) return;
     const c = await this.closePosition(pos, 'вручную');
-    if (c){ this.post('aliya', null, `Закрыла вручную по вашей команде: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)} (${fmtPct(c.pct)}).`, 'trade'); this.emit('react', {agent: 'aliya', say: `Закрыла ${c.sym} по команде`, pnl: c.pnl}); }
+    if (c){ this.post('aliya', null, `Закрыл вручную по вашей команде: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)} (${fmtPct(c.pct)}).`, 'trade'); this.emit('react', {agent: 'aliya', say: `Закрыл ${c.sym} по команде`, pnl: c.pnl}); }
   }
   resetPaper(){
     if (this.CFG.mode !== 'paper') return false;
@@ -325,7 +325,7 @@ export class Office extends EventEmitter {
     const clean = (Array.isArray(turns) ? turns : []).filter(t => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string' && t.content.trim()).slice(-8).map(t => ({role: t.role, content: t.content.slice(0, 1500)}));
     while (clean.length && clean[0].role !== 'user') clean.shift();
     if (!clean.length || clean[clean.length - 1].role !== 'user') throw new Error('Пустой вопрос');
-    const system = `Ты — ${a.name}, ${a.role} в офисе крипто-трейдинга JA Capital. Офис работает на реальных котировках; счёт: ${this.venue()}. Цепочка: Леон (тренды и новости) → Генри (риски) → Марк (сигналы) → Диана (исполнение).
+    const system = `Ты — ${a.name}, ${a.role} в офисе крипто-трейдинга JA Capital. Офис работает на реальных котировках; счёт: ${this.venue()}. Цепочка: Леон (тренды и новости) → Генри (риски) → Марк (сигналы) → Виктор (исполнение).
 Твой характер: ${a.persona}.
 Отвечай по-русски, от первого лица, 1–4 коротких предложения. Опирайся только на данные ниже и называй конкретные цифры. Если данных нет — так и скажи. Не обещай доходность и не давай советов по реальным инвестициям.
 Состояние офиса (JSON): ${JSON.stringify(this.snapshot())}`;

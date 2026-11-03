@@ -26,7 +26,7 @@ let office = null, news = null;
 
 // ---------- HTTP ----------
 const PUBLIC = path.join(__dirname, 'public');
-const TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon'};
+const TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8', '.txt': 'text/plain; charset=utf-8'};
 function send(res, code, body, headers = {}){ res.writeHead(code, {'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', ...headers}); res.end(body); }
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -46,7 +46,8 @@ const server = http.createServer(async (req, res) => {
   let p = url.pathname === '/' ? '/index.html' : url.pathname;
   const file = path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[\/\\])+/, ''));
   if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return send(res, 404, 'Не найдено');
-  send(res, 200, fs.readFileSync(file), {'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache'});
+  const longCache = /^\/(vendor|models)\//.test(p);
+  send(res, 200, fs.readFileSync(file), {'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': longCache ? 'public, max-age=86400' : 'no-cache'});
 });
 
 // ---------- WebSocket ----------
@@ -123,7 +124,7 @@ async function start(){
   office.on('pending', pushState);
   office.on('run', run => broadcast({t: 'run', run}));
   office.on('react', r => broadcast({t: 'react', ...r}));
-  office.on('open', p => broadcast({t: 'toast', text: `Диана открыла ${p.dir > 0 ? 'LONG' : 'SHORT'} ${p.sym}`}));
+  office.on('open', p => broadcast({t: 'toast', text: `Виктор открыл ${p.dir > 0 ? 'LONG' : 'SHORT'} ${p.sym}`}));
   office.on('reset', () => { news.state = office.state; broadcast({t: 'hello', cfg: cfgPublic(), state: office.publicState(), feed: office.state.feed.slice(0, 120), coins: coinsPayload(true), now: Date.now()}); });
   market.on('tick', async () => {
     broadcast({t: 'tick', now: Date.now(), coins: coinsPayload(false)});
