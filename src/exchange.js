@@ -9,7 +9,8 @@ const cap = s => s[0].toUpperCase() + s.slice(1);
 // Котировки: одна биржа для всех счетов. Демо-торговля Binance и Bybit идёт по ценам основной биржи.
 export function makeData(CFG) {
   if (CFG.quotes === 'mock') return new MockExchange(CFG);
-  return new ccxt[CFG.quotes]({enableRateLimit: true, timeout: 15000, options: {defaultType: CFG.marketType === 'swap' ? 'swap' : 'spot'}});
+  const only = CFG.quotes === 'binance' ? {fetchMarkets: CFG.marketType === 'swap' ? ['linear'] : ['spot']} : {};
+  return new ccxt[CFG.quotes]({enableRateLimit: true, timeout: 15000, options: {defaultType: CFG.marketType === 'swap' ? 'swap' : 'spot', ...only}});
 }
 
 // Счета: виртуальный — всегда; Binance — если заданы ключи; старая настройка EXCHANGE + EXCHANGE_API_KEY (Bybit) — тоже.

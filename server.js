@@ -172,8 +172,8 @@ async function runBacktestBg(why){
   BT.running = true; BT.error = ''; const t0 = Date.now();
   console.log(`[backtest] старт (${why})`);
   try {
-    // отдельное подключение с паузами между запросами, чтобы не упереться в лимиты Binance
-    const ex = new ccxt.binance({enableRateLimit: true, rateLimit: 350, timeout: 20000, options: {defaultType: 'swap'}});
+    // для фьючерсов — то же подключение, что и котировки: общий учёт лимитов Binance и без второй загрузки рынков
+    const ex = CFG.marketType === 'swap' ? data : new ccxt.binance({enableRateLimit: true, timeout: 20000, options: {defaultType: 'swap', fetchMarkets: ['linear']}});
     const coins = Object.keys(market.coins), now = Date.now();
     const data = await loadAll({ex, coins, symbolFor: b => symbolFor(b, 'swap'), now, log: btStatus});
     btStatus('считаю стратегии');
