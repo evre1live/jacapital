@@ -1852,7 +1852,7 @@ const O3 = (()=>{
       art:'landscape', board:{bg:'#1d3a2e', grain:'#0b1a10', title:'#d4b06a'},
       rug:{kind:'persian', pal:{ivory:'#e0cfae', cream:'#ecdfc4', navy:'#1d2a4a', navy2:'#2a3b63', blue:'#4d6e98', sky:'#93abc6', gold:'#b8893a', olive:'#5d6b35', rust:'#9a3b2b', tan:'#b98d5c', ink:'#24202a', wine:'#7a2324', wine2:'#8f2f2a'}},
       light:{lamp:'#ffcb86', floor:'#ffbf7a', mul:1.15, spot:'#ffd29a', expDay:0.98, expNight:1.05, envDay:0.55, envNight:0.28, hemiNight:'#ffdfc0'}},
-    manhattan: {name:'Манхэттен', props:'manhattan',
+    manhattan: {name:'Манхэттен', props:'manhattan', pendants:true,
       floor:{kind:'wide', tones:['#2c2724','#332c28','#28231f','#37302b','#2f2925'], seam:'rgba(0,0,0,.6)', grain:'#120e0c', rough:0.55, clear:0.2},
       wall:{kind:'slats', c:['#3b2c23','#46342a','#110b08'], rough:0.6, clear:0.15},
       main:{kind:'marble', base:'#111113', vein:'#d9d4cb', vein2:'#8d8a86', rough:0.12, clear:1},
@@ -1884,6 +1884,8 @@ const O3 = (()=>{
   let STY = STYLES[STYLE0];
   const STYLE_TEX = [];   // текстуры, которые перерисовываются при смене стиля
   const PANELS = [];      // настенные панели: {mat, tex, role, w, h}
+  const PENDANTS = [];    // подвесные светильники: [x, y, z]
+  const GLOWS = [];       // светящиеся материалы (подсветка винного шкафа): {m, day, night}
   const pick = (arr, i) => arr[Math.abs(i) % arr.length];
 
   // --- пол ---
@@ -2074,7 +2076,8 @@ const O3 = (()=>{
     M.brass.color.set(s.metal[0]); M.brass.roughness = s.metal[1]; M.gilt.color.set(s.gilt);
     M.velvet.color.set(s.drape[0]); M.velvet.sheenColor.set(s.drape[1]);
     M.cream.color.set(s.cap);
-    for (const l of LIGHT.lamps){ if (l.isSpotLight) l.color.set(s.light.spot); else l.color.set(l.userData.kind === 'floor' ? s.light.floor : s.light.lamp); }
+    if (GRP.pendants) GRP.pendants.visible = !!s.pendants; for (const l of LIGHT.pendants || []) l.visible = !!s.pendants;
+    for (const l of LIGHT.lamps){ if (l.userData.kind === 'pendant' || l.userData.kind === 'wine') continue; if (l.isSpotLight) l.color.set(s.light.spot); else l.color.set(l.userData.kind === 'floor' ? s.light.floor : s.light.lamp); }
     applyDay();
     return true;
   }
@@ -2476,6 +2479,28 @@ const O3 = (()=>{
     }
     CUR = null;
   }
+  function buildPendants(){
+    // бронзовые колпаки на шнурах над каждым столом: снаружи бронза, внутри и по кромке — тёплое свечение
+    grp('pendants');
+    const strip = std('#fff1d6', {emissive:new THREE.Color('#ffd9a0'), emissiveIntensity:1.6, side:THREE.BackSide}); M.pendantStrip = strip;
+    const cable = std('#141414', {roughness:0.5, metalness:0.6});
+    const prof = [[0.01, 6.2], [1.1, 6.2], [1.3, 5.4], [2.2, 4.4], [3.8, 2.9], [5.4, 1.2], [6.2, 0.15], [6.3, 0]].reverse().map(([r, y])=>new THREE.Vector2(r, y));   // снизу вверх — нормали наружу
+    const shellG = new THREE.LatheGeometry(prof, 40), innerG = new THREE.LatheGeometry(prof.map(v=>new THREE.Vector2(v.x*0.96, v.y - 0.12)), 40);
+    const rimM = std('#fff1d6', {emissive:new THREE.Color('#ffd9a0'), emissiveIntensity:1.6}); M.pendantRim = rimM;
+    // ореол под колпаком: мягкое тёплое свечение, ночью ярче
+    const haloT = canvasTex(128, 128, (c, w, h)=>{ const g = c.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2); g.addColorStop(0, 'rgba(255,214,150,1)'); g.addColorStop(0.25, 'rgba(255,196,120,.55)'); g.addColorStop(1, 'rgba(255,180,100,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h); });
+    const halo = M.pendantHalo = new THREE.SpriteMaterial({map:haloT, color:'#ffd6a0', blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0.5});
+    for (const x of DX){ const cx = x + 31, cy = 50, z = 70;
+      const shell = new THREE.Mesh(shellG, M.brass); shell.position.set(cx, z, cy); add(shell);
+      const inner = new THREE.Mesh(innerG, strip); inner.position.set(cx, z, cy); add(inner, false);
+      const hs = new THREE.Sprite(halo); hs.position.set(cx, z - 0.5, cy); hs.scale.set(19, 19, 1); hs.renderOrder = 5; put(hs);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(6.2, 0.22, 8, 48), rimM); rim.rotation.x = Math.PI/2; rim.position.set(cx, z + 0.1, cy); add(rim, false);
+      cylAt(cx, cy, z + 6.2, 0.7, 1.2, M.brass, 16);
+      const cord = cylAt(cx, cy, z + 7.4, 0.22, WH - z - 7.4, cable, 8); cord.castShadow = false;
+      PENDANTS.push([cx, cy, z + 1]);
+    }
+    CUR = null;
+  }
   function buildFloorLamp(){
     grp('floorlamp');
     cylAt(12, 138, 0, 4, 1, M.brass); cylAt(12, 138, 1, 0.6, 49, M.brass, 12);
@@ -2498,6 +2523,7 @@ const O3 = (()=>{
   // ---------- стены: окна, табло, экран, доска, часы, логотип, картина ----------
   function buildDecor(){
     buildWindow(34, 112, false); buildWindow(336, 414, true);
+    buildPendants();
     // филёнки: клетка и дерево в ореховых рамках (стена A — с окнами, стена B — с логотипом)
     wallPanel('A', 127, 324, 38, 86, 'plaid');
     wallPanel('A', 3, 19, 38, 96, 'wood');
@@ -2514,6 +2540,10 @@ const O3 = (()=>{
     boxAt(169.6, 1.9, 23.6, 124.8, 0.3, 58.8, M.brass, 0, null, false);
     const chart = canvasTex(1024, 456, (c, w, h)=>drawChartTex(c, w, h)); DYN.chart = chart;
     wallPlane('A', 232, 53, 119, 53, new THREE.MeshBasicMaterial({map:chart, toneMapped:false}), 2.45);
+    // экран с тепловой картой рынка (стена B, над стеллажом)
+    boxAt(0.2, 7.5, 62.5, 1.6, 46, 27, M.dark, 0.5); boxAt(1.75, 8.1, 63.1, 0.25, 44.8, 25.8, M.brass, 0, null, false);
+    const heat = canvasTex(1024, 576, (c, w, h)=>drawHeatTex(c, w, h)); DYN.heat = heat;
+    wallPlane('B', 30.5, 76, 44, 24.75, new THREE.MeshBasicMaterial({map:heat, toneMapped:false}), 2.1);
     // доска сигналов
     boxAt(124, 0, 34, 40, 1.6, 46, M.brass, 0.5);
     const board = canvasTex(400, 460, (c, w, h)=>drawBoardTex(c, w, h)); DYN.board = board;
@@ -2551,7 +2581,7 @@ const O3 = (()=>{
     }); STYLE_TEX.push(pic);
     wallPlane('B', 173, 68.5, 40, 27, std('#ffffff', {map:pic, roughness:0.6}), 1.95);
     boxAt(0.5, 159, 89.6, 3, 28, 1.2, M.brass, 0.4);
-    DYN.chart.last = DYN.board.last = DYN.ticker.last = DYN.clock.last = -1;
+    DYN.chart.last = DYN.board.last = DYN.ticker.last = DYN.clock.last = DYN.heat.last = -1;
   }
   function wallPanel(wall, u0, u1, z0, z1, kind){
     const w = u1 - u0, h = z1 - z0, inset = 1.6;
@@ -2676,6 +2706,10 @@ const O3 = (()=>{
     if (M.shade) M.shade.emissiveIntensity = DAY ? 0.15 : 0.55;
     if (M.lampGlass) M.lampGlass.emissiveIntensity = DAY ? 0.15 : 0.6;
     if (M.bulb) M.bulb.emissiveIntensity = DAY ? 0.6 : 2.2;
+    if (M.pendantStrip) M.pendantStrip.emissiveIntensity = DAY ? 0.5 : 1.8;
+    if (M.pendantRim) M.pendantRim.emissiveIntensity = DAY ? 0.4 : 1.6;
+    if (M.pendantHalo) M.pendantHalo.opacity = DAY ? 0.1 : 0.55;
+    for (const g of GLOWS) g.m.emissiveIntensity = DAY ? g.day : g.night;
   }
   function setDay(day){ DAY = !!day; if (ok) applyDay(); }
 
@@ -2697,6 +2731,8 @@ const O3 = (()=>{
     for (const [ty, tz, w] of [[102, 67, 0.45], [173, 68, 0.5]]){
       const sp = new THREE.SpotLight('#ffdcaa', 9000, 120, w, 0.7, 2); sp.position.set(14, tz+34, ty); sp.target.position.set(0, tz, ty); sp.userData.base = sp.intensity; LIGHT.lamps.push(sp); scene.add(sp); scene.add(sp.target);
     }
+    // подвесы: узкий тёплый конус вниз — пятно света на столе и полу
+    for (const [x, y, z] of PENDANTS){ const p = new THREE.SpotLight('#ffcf94', 20000, 150, 0.66, 0.8, 2); p.position.set(x, z, y); p.target.position.set(x, 0, y); p.userData.base = p.intensity; p.userData.kind = 'pendant'; LIGHT.lamps.push(p); LIGHT.pendants = (LIGHT.pendants || []).concat(p); scene.add(p); scene.add(p.target); }
     const win = LIGHT.win = new THREE.PointLight('#7f8fd0', 1800, 160, 2); win.position.set(220, 70, 20); scene.add(win);
   }
 
@@ -2749,6 +2785,36 @@ const O3 = (()=>{
     });
     c.textAlign = 'left'; c.textBaseline = 'alphabetic';
   }
+  // тепловая карта: площадь — примерная капитализация, цвет — изменение за 24 ч
+  const CAP = {BTC:50, ETH:18, BNB:7, SOL:6, XRP:6, DOGE:3, ADA:2, TON:2, AVAX:1.5, LINK:1.5, LTC:1, TRX:2, DOT:1};
+  function drawHeatTex(c, w, h){
+    c.fillStyle = '#0c0c0e'; c.fillRect(0, 0, w, h);
+    c.font = `700 30px ${FONT}`; c.fillStyle = '#c8a97e'; c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillText('РЫНОК · 24 Ч', 28, 34);
+    if (!COINS.length || !S.coins) return;
+    const items = COINS.map(cn => ({sym:cn.sym, w:CAP[cn.sym] || 1.5, st:S.coins[cn.sym]})).filter(x => x.st).sort((a, b) => b.w - a.w);
+    const tiles = [];
+    const split = (arr, x, y, ww, hh)=>{
+      if (arr.length === 1){ tiles.push({...arr[0], x, y, ww, hh}); return; }
+      const tot = arr.reduce((a, b) => a + b.w, 0); let acc = 0, k = 0;
+      while (k < arr.length - 1 && acc + arr[k].w <= tot/2) acc += arr[k++].w;
+      if (k === 0){ acc = arr[0].w; k = 1; }
+      const f = acc / tot;
+      if (ww >= hh){ split(arr.slice(0, k), x, y, ww*f, hh); split(arr.slice(k), x + ww*f, y, ww*(1 - f), hh); }
+      else { split(arr.slice(0, k), x, y, ww, hh*f); split(arr.slice(k), x, y + hh*f, ww, hh*(1 - f)); }
+    };
+    split(items, 20, 64, w - 40, h - 84);
+    for (const t of tiles){
+      const ch = indicators(t.sym).chg24 || 0, k = Math.min(1, Math.abs(ch) / 0.06);
+      const base = ch >= 0 ? [31, 157, 85] : [205, 58, 58], dark = [26, 26, 28];
+      const col = base.map((v, i) => Math.round(dark[i] + (v - dark[i]) * (0.35 + 0.65*k)));
+      c.fillStyle = `rgb(${col.join(',')})`; c.fillRect(t.x + 3, t.y + 3, t.ww - 6, t.hh - 6);
+      const big = Math.min(t.ww, t.hh), fs = Math.max(22, Math.min(78, big * 0.3));
+      c.fillStyle = '#ffffff'; c.textAlign = 'center';
+      c.font = `800 ${fs}px ${FONT}`; c.fillText(t.sym, t.x + t.ww/2, t.y + t.hh/2 - fs*0.28);
+      c.font = `600 ${fs*0.46}px ${FONT}`; c.fillStyle = 'rgba(255,255,255,.88)'; c.fillText(`${ch >= 0 ? '+' : '−'}${Math.abs(ch*100).toFixed(1)}%`, t.x + t.ww/2, t.y + t.hh/2 + fs*0.42);
+    }
+    c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+  }
   function drawClockTex(c, w, h){
     c.fillStyle = '#f6efdc'; c.beginPath(); c.arc(w/2,h/2,w/2,0,Math.PI*2); c.fill();
     c.fillStyle = '#2a2230'; for (let k=0;k<12;k++){ const an = k/12*Math.PI*2; c.beginPath(); c.arc(w/2+Math.sin(an)*100, h/2-Math.cos(an)*100, k%3===0?7:4, 0, Math.PI*2); c.fill(); }
@@ -2793,6 +2859,7 @@ const O3 = (()=>{
     const sigKey = (S.sigLog||[])[0] || null, sigN = (S.sigLog||[]).length;
     if (DYN.board.key !== sigKey || DYN.board.n !== sigN || DYN.board.last < 0){ DYN.board.key = sigKey; DYN.board.n = sigN; DYN.board.last = t; redraw(DYN.board); }
     if (t - (DYN.clock.last||0) > 1 || DYN.clock.last < 0){ DYN.clock.last = t; redraw(DYN.clock); }
+    if (DYN.heat && (t - (DYN.heat.last||0) > 2 || DYN.heat.last < 0)){ DYN.heat.last = t; redraw(DYN.heat); }
     for (let i=0;i<4;i++){ const sc = DYN['screen'+i]; if (t - (sc.last||0) > 0.3){ sc.last = t; redraw(sc); } }
   }
 
@@ -2944,7 +3011,7 @@ const O3 = (()=>{
     {file:'mh_plant_olive', pbr:true, places:[{hide:['plant1'], cx:417, cy:126, h:44, uniform:true, rot:1.1}]},
     {file:'mh_plant_snake', pbr:true, places:[{hide:['plant2'], cx:42, cy:192, h:26, uniform:true, rot:0.3}, {hide:[], cx:150, cy:195, h:23, uniform:true, rot:2.2}]},
     {file:'mh_plant_monstera', pbr:true, places:[{hide:['plant3'], cx:342, cy:189, h:26, uniform:true, rot:0.8}, {hide:[], cx:418, cy:191, h:24, uniform:true, rot:2.6}]},
-    {file:'mh_plant_palm', pbr:true, places:[{hide:[], cx:414, cy:20, h:44, uniform:true, rot:0.2}]},
+    {file:'mh_plant_palm', pbr:true, places:[{hide:[], cx:419, cy:54, h:40, uniform:true, rot:0.2}]},
     // стеллажи: высокий вдоль левой стены, низкий в углу у окна (на месте старого шкафа)
     {file:'mh_shelf_tall', pbr:true, tint:'#8b7b70', places:[{hide:[], cx:7, cy:40, d:40, uniform:'d', rot:0}]},
     {file:'mh_shelf_low', pbr:true, tint:'#8b7b70', places:[{hide:['bookcase'], cx:19, cy:6, h:22.5, uniform:true, rot:-Math.PI/2}]},
@@ -2957,6 +3024,17 @@ const O3 = (()=>{
     {file:'mh_sofa', pbr:true, places:[{hide:['sofa'], cx:15.5, cy:174, d:58, uniform:'d', rot:0}]},
     {file:'mh_lounge', pbr:true, places:[{hide:['armchair'], cx:388, cy:166, h:29, uniform:true, rot:Math.PI}]},
     {file:'mh_floorlamp', pbr:true, places:[{hide:['floorlamp', 'globe'], cx:11, cy:136, h:54, uniform:true, rot:Math.PI/2}]},
+    // бронзовые бык и медведь на комоде — смотрят друг на друга
+    {file:'mh_bull', pbr:true, places:[{hide:[], cx:8, cy:107.5, z:18.1, h:7, uniform:true, rot:-0.55}]},
+    {file:'mh_bear', pbr:true, places:[{hide:[], cx:8, cy:117.2, z:18.1, h:7, uniform:true, rot:0.55}]},
+    // винный шкаф в правом углу под окном: тёплая подсветка полок, светодиод над дверцей и свет на пол
+    {file:'mh_wine', pbr:true, glow:{color:'#ffb36b', day:0.06, night:0.42}, places:[{hide:[], cx:421, cy:5.2, h:36, uniform:true, rot:-Math.PI/2, after:(i)=>{
+      const fy = 5.2 + i.size.x * i.kx / 2 + 0.1;
+      const led = std('#fff1d6', {emissive:new THREE.Color('#ffc07a'), emissiveIntensity:1.6}); GLOWS.push({m:led, day:0.5, night:1.8}); led.emissiveIntensity = DAY ? 0.5 : 1.8;
+      boxAt(414.6, fy, i.top - 4.2, 12.8, 0.25, 0.3, led, 0, null, false);
+      const p = new THREE.PointLight('#ffb36b', 900, 36, 2); p.position.set(421, i.top * 0.5, fy + 3.5);
+      p.userData.base = p.intensity; p.userData.kind = 'wine'; p.intensity = p.userData.base * (DAY ? 0.35 : 1) * STY.light.mul; LIGHT.lamps.push(p); scene.add(p);
+    }}]},
   ];
   const PROP_MAT = {wood:{roughness:0.5, clearcoat:0.45, clearcoatRoughness:0.35}, leather:{roughness:0.55, clearcoat:0.25, clearcoatRoughness:0.5, sheen:0.3}, brass:{roughness:0.35, metalness:0.25, clearcoat:0.6}, plastic:{roughness:0.4}, plant:{roughness:0.75}};
   async function loadProps(){
@@ -2975,6 +3053,8 @@ const O3 = (()=>{
           ? new THREE.MeshPhysicalMaterial({map:m0.map, normalMap:m0.normalMap || null, roughnessMap:m0.roughnessMap || null, metalnessMap:m0.metalnessMap || null, roughness:m0.roughness ?? 1, metalness:m0.metalness ?? 1, clearcoat:def.clearcoat || 0, clearcoatRoughness:0.35})
           : new THREE.MeshPhysicalMaterial({map:m0.map, roughness:o2.roughness ?? 0.6, metalness:o2.metalness ?? 0, clearcoat:o2.clearcoat || 0, clearcoatRoughness:o2.clearcoatRoughness ?? 0.4, sheen:o2.sheen || 0, sheenColor:new THREE.Color('#ffd9b8')});
         if (def.tint) m.color.set(def.tint);
+        // подсветка изнутри: светлые части текстуры (полки, этикетки) мягко светятся, тёмный корпус остаётся тёмным
+        if (def.glow){ m.emissive = new THREE.Color(def.glow.color); m.emissiveMap = m.map; GLOWS.push({m, day:def.glow.day, night:def.glow.night}); m.emissiveIntensity = DAY ? def.glow.day : def.glow.night; }
         if (m.normalMap) m.normalScale.set(0.9, 0.9);
         o.material = m; o.castShadow = true; o.receiveShadow = true; });
       g.scene.updateMatrixWorld(true);
@@ -3246,7 +3326,7 @@ const O3 = (()=>{
     } catch(e){ console.warn('[3D] портреты:', e); }
   }
 
-  return {init, render, overlay, attach, setDay, setStyle, styles:()=>Object.fromEntries(Object.entries(STYLES).map(([k, v])=>[k, v.name])), get style(){ return Object.keys(STYLES).find(k=>STYLES[k]===STY); }, view(az=0, el=0, zoom=1, tx){ st.az = az; st.el = el; st.zoom = zoom; if (tx) Object.assign(T, tx); }, get ok(){ return ok; }, get debug(){ return {modelsSettled, avatarsDone, figs:Object.values(FIG).map(f=>f.kind||'proc')}; }, get failed(){ return failed; }, project};
+  return {init, render, overlay, attach, setDay, setStyle, styles:()=>Object.fromEntries(Object.entries(STYLES).map(([k, v])=>[k, v.name])), get style(){ return Object.keys(STYLES).find(k=>STYLES[k]===STY); }, view(az=0, el=0, zoom=1, tx){ st.az = az; st.el = el; st.zoom = zoom; if (tx) Object.assign(T, tx); }, get ok(){ return ok; }, get debug(){ return {modelsSettled, avatarsDone, figs:Object.values(FIG).map(f=>f.kind||'proc'), groups:Object.fromEntries(Object.entries(GRP).map(([k, g])=>[k, g.visible ? g.children.length : -1])), lamps:(LIGHT.lamps||[]).length}; }, get failed(){ return failed; }, project};
 })();
 
 // ---------- тема: светлая (в офисе день) / тёмная (ночь) / авто (как в системе) ----------
