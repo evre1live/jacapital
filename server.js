@@ -117,14 +117,14 @@ async function start(){
   news = new News(CFG, office.state, () => office.ctx.id());
   await office.initAccount();
   console.log(`Режим: ${office.venue()}. Монеты: ${Object.keys(market.coins).join(', ')}. Таймфрейм ${CFG.timeframe}. Claude: ${aiEnabled() ? 'подключен' : 'нет ключа'}.`);
-  if (!office.state.feed.length) office.post('system', null, `Офис открыт. Счёт: ${office.venue()}. Леон начинает следить за рынком.`, 'system');
+  if (!office.state.feed.length) office.post('system', null, `Офис открыт. Счёт: ${office.venue()}. Рустам начинает следить за рынком.`, 'system');
 
   office.on('feed', m => broadcast({t: 'feed', m}));
   office.on('state', pushState);
   office.on('pending', pushState);
   office.on('run', run => broadcast({t: 'run', run}));
   office.on('react', r => broadcast({t: 'react', ...r}));
-  office.on('open', p => broadcast({t: 'toast', text: `Виктор открыл ${p.dir > 0 ? 'LONG' : 'SHORT'} ${p.sym}`}));
+  office.on('open', p => broadcast({t: 'toast', text: `Артур открыл ${p.dir > 0 ? 'LONG' : 'SHORT'} ${p.sym}`}));
   office.on('reset', () => { news.state = office.state; broadcast({t: 'hello', cfg: cfgPublic(), state: office.publicState(), feed: office.state.feed.slice(0, 120), coins: coinsPayload(true), now: Date.now()}); });
   market.on('tick', async () => {
     broadcast({t: 'tick', now: Date.now(), coins: coinsPayload(false)});

@@ -1,4 +1,4 @@
-// Офис: состояние, конвейер Леон → Генри → Марк → Виктор, сделки, сохранение, Claude
+// Офис: состояние, конвейер Рустам → Джама → Нод → Артур, сделки, сохранение, Claude
 import fs from 'node:fs';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
@@ -7,10 +7,10 @@ import {ask, askJSON, aiEnabled} from './claude.js';
 const {sideRu, fmtUSD, fmtPct, fmtPrice, fmtQty, clamp} = B;
 
 const AGENTS = {
-  nika:  {name: 'Леон',  role: 'аналитик трендов и новостей', persona: 'энергичный и любопытный, всегда называет источник новости и его надёжность'},
-  boris: {name: 'Генри', role: 'риск-менеджер сделок',        persona: 'осторожный педант с сухим юмором, мыслит стопами и размером риска'},
-  timur: {name: 'Марк', role: 'стратег сигналов',            persona: 'уверенный, говорит процентами уверенности и порогами'},
-  aliya: {name: 'Виктор',  role: 'трейдер-исполнитель',         persona: 'собранный и лаконичный, отчитывается ордерами и результатом в долларах'},
+  nika:  {name: 'Рустам',  role: 'аналитик трендов и новостей', persona: 'энергичный и любопытный, всегда называет источник новости и его надёжность'},
+  boris: {name: 'Джама', role: 'риск-менеджер сделок',        persona: 'осторожный педант с сухим юмором, мыслит стопами и размером риска'},
+  timur: {name: 'Нод', role: 'стратег сигналов',            persona: 'уверенный, говорит процентами уверенности и порогами'},
+  aliya: {name: 'Артур',  role: 'трейдер-исполнитель',         persona: 'собранный и лаконичный, отчитывается ордерами и результатом в долларах'},
 };
 
 function freshState(CFG){
@@ -281,7 +281,7 @@ export class Office extends EventEmitter {
     else return;
     st.profile = 'custom'; this.touch();
   }
-  setAuto(v){ this.state.auto = !!v; this.post('system', null, v ? 'Автосделки включены: Виктор исполняет сигналы сама.' : 'Ручной режим: Виктор будет ждать вашего подтверждения по каждой сделке.', 'system'); this.touch(); }
+  setAuto(v){ this.state.auto = !!v; this.post('system', null, v ? 'Автосделки включены: Артур исполняет сигналы сам.' : 'Ручной режим: Артур будет ждать вашего подтверждения по каждой сделке.', 'system'); this.touch(); }
   setTrading(v){ this.state.tradingOn = !!v; this.post('system', null, v ? 'Торговля включена.' : 'Торговля на паузе: новые сделки не открываются, стопы и тейки по открытым позициям работают.', 'system'); this.touch(); }
   async approve(id, ok){
     const st = this.state; const p = st.pending.find(x => x.id === id); if (!p) return;
@@ -325,7 +325,7 @@ export class Office extends EventEmitter {
     const clean = (Array.isArray(turns) ? turns : []).filter(t => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string' && t.content.trim()).slice(-8).map(t => ({role: t.role, content: t.content.slice(0, 1500)}));
     while (clean.length && clean[0].role !== 'user') clean.shift();
     if (!clean.length || clean[clean.length - 1].role !== 'user') throw new Error('Пустой вопрос');
-    const system = `Ты — ${a.name}, ${a.role} в офисе крипто-трейдинга JA Capital. Офис работает на реальных котировках; счёт: ${this.venue()}. Цепочка: Леон (тренды и новости) → Генри (риски) → Марк (сигналы) → Виктор (исполнение).
+    const system = `Ты — ${a.name}, ${a.role} в офисе крипто-трейдинга JA Capital. Офис работает на реальных котировках; счёт: ${this.venue()}. Цепочка: Рустам (тренды и новости) → Джама (риски) → Нод (сигналы) → Артур (исполнение).
 Твой характер: ${a.persona}.
 Отвечай по-русски, от первого лица, 1–4 коротких предложения. Опирайся только на данные ниже и называй конкретные цифры. Если данных нет — так и скажи. Не обещай доходность и не давай советов по реальным инвестициям.
 Состояние офиса (JSON): ${JSON.stringify(this.snapshot())}`;

@@ -1,4 +1,4 @@
-// Логика агентов: Леон (сводка), Генри (риски), Марк (сигналы). Исполнение — в office.js
+// Логика агентов: Рустам (сводка), Джама (риски), Нод (сигналы). Исполнение — в office.js
 export const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 export const sgn = x => x > 0 ? 1 : x < 0 ? -1 : 0;
 export const sideRu = d => d > 0 ? 'LONG' : 'SHORT';
@@ -45,7 +45,7 @@ export function indicators(coin) {
     high20: Math.max(...w20.map(k => k.h), coin.price), low20: Math.min(...w20.map(k => k.l), coin.price)};
 }
 export function atrPctSeries(cs) {
-  // средняя волатильность свечи за последние ~200 свечей — «норма» для Генри
+  // средняя волатильность свечи за последние ~200 свечей — «норма» для Джамы
   const arr = cs.slice(-200); if (arr.length < 3) return 0.004;
   let s = 0; for (let i = 1; i < arr.length; i++) { const k = arr[i], p = arr[i - 1].c; s += Math.max(k.h - k.l, Math.abs(k.h - p), Math.abs(k.l - p)) / k.c; }
   return s / (arr.length - 1);
@@ -66,7 +66,7 @@ export function sentimentFor(sym, news, p, now) {
   return {sent: Math.tanh(s * 1.4), avgRel: wsum ? relsum / wsum : 1};
 }
 
-// ---------- Леон ----------
+// ---------- Рустам ----------
 export function nikaScan(ctx, focus) {
   const {coins, state} = ctx; const p = state.params; const items = []; const now = Date.now();
   for (const sym of Object.keys(coins)) {
@@ -102,7 +102,7 @@ export function nikaText(brief, focus) {
   return parts.join(' ');
 }
 
-// ---------- Генри ----------
+// ---------- Джама ----------
 export function borisEvaluate(ctx, brief) {
   const {coins, state} = ctx; const p = state.params, eq = ctx.equity(), out = [];
   const pos = state.pf.positions;
@@ -151,7 +151,7 @@ export function borisText(evals) {
   }).join(' ');
 }
 
-// ---------- Марк ----------
+// ---------- Нод ----------
 export function timurSignals(ctx, brief, evals) {
   const {state} = ctx; const p = state.params, sigs = []; let best = 0;
   for (const e of evals) {
@@ -171,7 +171,7 @@ export function timurSignals(ctx, brief, evals) {
   return {sigs, best};
 }
 export function timurText(res, evals, p) {
-  if (!res.sigs.length) return res.best ? `Сигналов нет: лучшая уверенность ${res.best}% ниже порога ${p.threshold}%.` : (evals.length ? 'Сигналов нет: Генри всё отклонил.' : 'Открытые позиции держим, разворота нет.');
+  if (!res.sigs.length) return res.best ? `Сигналов нет: лучшая уверенность ${res.best}% ниже порога ${p.threshold}%.` : (evals.length ? 'Сигналов нет: Джама всё отклонил.' : 'Открытые позиции держим, разворота нет.');
   return res.sigs.map(s => s.type === 'open'
     ? `Сигнал: ${sideRu(s.dir)} ${s.sym}, уверенность ${s.conf}%. Вход ~${fmtPrice(s.entry)}, стоп ${fmtPrice(s.sl)}, тейк ${fmtPrice(s.tp)}.`
     : `Закрыть ${sideRu(s.dir)} ${s.sym}: картина развернулась.`).join(' ');

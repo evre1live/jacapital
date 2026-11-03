@@ -316,7 +316,7 @@ function renderPortfolio(full){
     posBox.innerHTML = pf.positions.length ? `<table class="tbl"><thead><tr><th>Монета</th><th class="num">Вход → сейчас</th><th class="num">P&L</th><th></th></tr></thead><tbody>${pf.positions.map(p=>
       `<tr data-pid="${p.id}"><td><b class="mono">${p.sym}</b> <span class="side-pill ${p.dir>0?'l':'s'}">${sideRu(p.dir)}</span><br><small style="color:var(--faint)" data-f="lv"></small></td>
       <td class="num">${esc(fmtPrice(p.sym,p.entry))}<br><small style="color:var(--faint)" data-f="px"></small></td><td class="num" data-f="pnl"></td>
-      <td class="num"><button type="button" class="btn btn-sm" data-close="${p.id}" aria-label="Закрыть ${sideRu(p.dir)} ${p.sym}">Закрыть</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">Открытых позиций нет. Виктор ждёт сигнал от Марка.</div>`;
+      <td class="num"><button type="button" class="btn btn-sm" data-close="${p.id}" aria-label="Закрыть ${sideRu(p.dir)} ${p.sym}">Закрыть</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">Открытых позиций нет. Артур ждёт сигнал от Нода.</div>`;
   }
   for (const p of pf.positions){
     const tr = posBox.querySelector(`[data-pid="${p.id}"]`); if (!tr) continue;
@@ -340,7 +340,7 @@ function renderApproval(){
   const el = $('#approval');
   if (!S.pending.length){ el.hidden = true; el.innerHTML = ''; el._h = ''; return; }
   const more = S.pending.length - 2;
-  const h = `<h4><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>Виктор ждёт решения</h4>` + S.pending.slice(0,2).map(pendMini).join('') + (more>0 ? `<div class="appr-more">Ещё ${more} — во вкладке «Портфель»</div>` : '');
+  const h = `<h4><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>Артур ждёт решения</h4>` + S.pending.slice(0,2).map(pendMini).join('') + (more>0 ? `<div class="appr-more">Ещё ${more} — во вкладке «Портфель»</div>` : '');
   if (el._h !== h){ el._h = h; el.innerHTML = h; }
   el.hidden = false;
   el.onclick = e=>{ const ap = e.target.closest('[data-appr]'); if (ap){ approvePending(+ap.dataset.appr, ap.dataset.ok==='1'); ap.closest('.appr-row').style.opacity = .5; } };
@@ -411,7 +411,7 @@ const CONTROLS = {
   nika:[{k:'rumorTrust', label:'Доверие к слухам', min:0.3, max:1.6, step:0.1, fmt:v=>`×${(+v).toFixed(1)}`, hint:'Вес новостей из источников с надёжностью ниже 50%.'}],
   boris:[{k:'riskPct', label:'Риск на сделку', min:0.25, max:3, step:0.25, fmt:v=>`${(+v).toFixed(2)}% капитала`, hint:'Сколько капитала теряется, если сработает стоп.'},
          {k:'rr', label:'Тейк к стопу', min:1.2, max:3.5, step:0.1, fmt:v=>`${(+v).toFixed(1)} : 1`, hint:'Во сколько раз цель дальше стопа.'}],
-  timur:[{k:'threshold', label:'Порог уверенности', min:40, max:85, step:1, fmt:v=>`${v}%`, hint:'Сигналы ниже порога до Виктора не доходят.'}],
+  timur:[{k:'threshold', label:'Порог уверенности', min:40, max:85, step:1, fmt:v=>`${v}%`, hint:'Сигналы ниже порога до Артура не доходят.'}],
   aliya:[{k:'maxPos', label:'Максимум позиций', min:1, max:6, step:1, fmt:v=>String(v), hint:'Одновременно открытых сделок.'},
          {k:'dailyLimit', label:'Дневной лимит убытка', min:1, max:15, step:1, fmt:v=>`${v}%`, hint:'После него новые сделки до конца дня не открываются.'},
          {k:'timeStop', label:'Выход по времени', min:12, max:288, step:12, fmt:v=>`через ${v} свеч.`, hint:'Закрыть позицию, если за это время не сработали ни стоп, ни тейк.'},
@@ -424,7 +424,7 @@ function buildAgentPanel(){
     ? `<div class="ctl"><label for="p_${c.k}">${c.label}</label><label class="switch"><input type="checkbox" id="p_${c.k}" data-pk="${c.k}" ${S.params[c.k]?'checked':''}></label><div class="hint">${c.hint}</div></div>`
     : `<div class="ctl"><label for="p_${c.k}">${c.label}</label><output id="o_${c.k}">${c.fmt(S.params[c.k])}</output><input type="range" id="p_${c.k}" data-pk="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${S.params[c.k]}"><div class="hint">${c.hint}</div></div>`).join('');
   const quick = {nika:['Что сейчас на рынке?','Какой новости ты не доверяешь?','Какая монета самая горячая?'], boris:['Какие риски видишь?','Почему отклонил последнюю идею?','Не перегружен ли портфель?'], timur:['Почему такой сигнал?','Что нужно для сигнала по BTC?','Какой порог ты бы поставил?'], aliya:['Как дела у счёта?','Что с открытыми позициями?','Какая сделка была лучшей?']}[id];
-  const acc = {nika:'Леона', boris:'Генри', timur:'Марка', aliya:'Виктора'}[id], ins = {nika:'Леоном', boris:'Генри', timur:'Марком', aliya:'Виктором'}[id];
+  const acc = {nika:'Рустама', boris:'Джаму', timur:'Нода', aliya:'Артура'}[id], ins = {nika:'Рустамом', boris:'Джамой', timur:'Нодом', aliya:'Артуром'}[id];
   const ai = CFGC.ai
     ? `<div class="chat" id="chatLog"></div><div class="quick" id="quick">${quick.map(q=>`<button type="button">${esc(q)}</button>`).join('')}</div><form class="chatform" id="chatForm"><input id="chatIn" aria-label="Вопрос агенту" type="text" maxlength="400" placeholder="Спросите ${acc} о работе" autocomplete="off"><button class="btn btn-accent" type="submit" id="chatSend">Спросить</button></form>`
     : `<div class="ainote">Разговор с агентом включится, когда на сервере будет задан ANTHROPIC_API_KEY.</div>`;
@@ -455,7 +455,7 @@ function updateAgentPanel(){
 }
 function renderChat(id){
   const log = $('#chatLog'); if (!log) return; const a = AG[id];
-  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Генри. Считаю риски и режу лишнее. Спрашивайте.', timur:'Марк на связи. Могу объяснить любой сигнал и порог.', aliya:'Виктор. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
+  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Джама. Считаю риски и режу лишнее. Спрашивайте.', timur:'Нод на связи. Могу объяснить любой сигнал и порог.', aliya:'Артур. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
   log.innerHTML = CHATS[id].map(m=>`<div class="bub ${m.role==='user'?'me':'ai'}${m.err?' err':''}" style="--c:${a.color}">${esc(m.content)}</div>`).join('');
 }
 function sendChat(id, text){
