@@ -77,7 +77,7 @@ npm run mock
 - `server.js` — веб-сервер, вход по паролю, WebSocket, расписание опросов.
 - `src/` — котировки (`market.js`), новости (`news.js`), логика агентов (`brain.js`), исполнение ордеров (`broker.js`), офис и сделки (`office.js`), Claude (`claude.js`).
 - `client/` — исходники интерфейса: стили `app.css`, тема `theme.js`, 3D-офис `scene3d.js` (Three.js), 2D-запасная сцена `scene.js`. После правок соберите `public/index.html` командой `python3 build.py`.
-- `public/vendor/` — Three.js r169 (лицензия MIT, `three-LICENSE.txt`), `public/models/` — модели персонажей: glTF с буфером в base64 внутри `.json` и текстуры `.jpg`. Скелет для сидения, ходьбы и печати строится в браузере по пропорциям модели.
+- `public/vendor/` — Three.js r169 (лицензия MIT, `three-LICENSE.txt`), `public/models/` — модели персонажей, `public/models/props/` — мебель: glTF с буфером в base64 внутри `.json` и текстуры `.jpg`. Скелет персонажей для сидения, ходьбы и печати строится в браузере по пропорциям модели. Если модель не загрузится, на её месте остаётся простая фигура или мебель.
 
 ## Claude
 

@@ -1723,6 +1723,7 @@ const O3 = (()=>{
   const st = {w:0, h:0, dpr:1, az:0, el:0, zoom:1, drag:null, lastT:0};
   const FIG = {}, DYN = {}, M = {}, LAMPS = [];
   let planeMeshes = [], selRing = null, hovRing = null, mugs = {}, bell = null, avatarsDone = false;
+  const PLATES = [], SCREENS = [], PLANTS = [[46, 30, true], [418, 126, true], [40, 192, false], [342, 188, false]];
   const deg = Math.PI/180;
   const T = {x:224, y:30, z:104};
   const FACE_YAW = {SE: Math.PI/2, NW: -Math.PI/2, SW: 0, NE: Math.PI};
@@ -1751,6 +1752,7 @@ const O3 = (()=>{
         buildPlanes();
         applyDay();
         loadModels();
+        loadProps();
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ for (const k in DYN) DYN[k].last = -1; refreshStaticText(); });
         ok = true;
       } catch (e) { console.warn('[3D] недоступно, остаётся 2D:', e); failed = true; }
@@ -1762,17 +1764,21 @@ const O3 = (()=>{
   // ---------- хелперы ----------
   function std(color, o={}){ return new THREE.MeshStandardMaterial({color, roughness:0.7, ...o}); }
   function phys(color, o={}){ return new THREE.MeshPhysicalMaterial({color, roughness:0.5, ...o}); }
-  function add(mesh, shadow=true){ mesh.castShadow = shadow; mesh.receiveShadow = true; scene.add(mesh); return mesh; }
+  // группы мебели: процедурные детали собираются в группу, которую потом заменяет модель
+  let CUR = null; const GRP = {};
+  function grp(name){ const g = new THREE.Group(); g.name = name; scene.add(g); GRP[name] = g; CUR = g; return g; }
+  function put(o){ (CUR || scene).add(o); return o; }
+  function add(mesh, shadow=true){ mesh.castShadow = shadow; mesh.receiveShadow = true; put(mesh); return mesh; }
   function boxAt(x0, y0, z0, dx, dy, dz, mat, r=0, parent=null, shadow=true){
     const g = r > 0 ? new RoundedBoxGeometry(dx, dz, dy, 3, Math.min(r, dx/2-0.01, dy/2-0.01, dz/2-0.01)) : new THREE.BoxGeometry(dx, dz, dy);
     const m = new THREE.Mesh(g, mat); m.position.set(x0+dx/2, z0+dz/2, y0+dy/2);
-    m.castShadow = shadow; m.receiveShadow = true; (parent || scene).add(m); return m;
+    m.castShadow = shadow; m.receiveShadow = true; (parent || CUR || scene).add(m); return m;
   }
   function cylAt(x, y, z0, r, h, mat, seg=28, rTop=null, parent=null, open=false){
     const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop ?? r, r, h, seg, 1, open), mat);
-    m.position.set(x, z0+h/2, y); m.castShadow = true; m.receiveShadow = true; (parent || scene).add(m); return m;
+    m.position.set(x, z0+h/2, y); m.castShadow = true; m.receiveShadow = true; (parent || CUR || scene).add(m); return m;
   }
-  function sphereAt(x, y, z, r, mat, parent=null){ const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 12), mat); m.position.set(x, z, y); m.castShadow = true; (parent || scene).add(m); return m; }
+  function sphereAt(x, y, z, r, mat, parent=null){ const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 12), mat); m.position.set(x, z, y); m.castShadow = true; (parent || CUR || scene).add(m); return m; }
   // плоскость на стене A (Y=0, лицом к +Y) или на стене B (X=0, лицом к +X); u — вдоль стены, z — высота центра
   function wallPlane(wall, u, z, w, h, mat, off=0.4){
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
@@ -1901,87 +1907,107 @@ const O3 = (()=>{
   function buildFurniture(){
     for (let i=0;i<4;i++) buildDesk(i);
     buildTable(); buildSofa(); buildArmchair(); buildSideboard(); buildBookcase(); buildFloorLamp();
-    buildPlant(46, 30, true); buildPlant(418, 126, true); buildPlant(40, 192, false); buildPlant(342, 188, false);
+    PLANTS.forEach(([x, y, big], k)=>{ grp('plant'+k); buildPlant(x, y, big); CUR = null; });
   }
   function buildDesk(i){
     const a = AG_LIST[i], x = DX[i], y = DESK_Y, H = DESK_H, D = DESK_D, W = DESK_W;
+    grp('desk'+i);
     boxAt(x+2, y+2, 0, 16, D-4, H-2.5, M.mahog, 0.4);
     boxAt(x+W-5, y+2, 0, 3, D-4, H-2.5, M.mahog, 0.3);
     boxAt(x+18, y+D-4, 5, W-23, 1.6, H-7.5, M.mahogD, 0.2);
     for (let k=0;k<3;k++){ const z = 2.4 + k*5.8; boxAt(x+3, y+D-2.05, z, 14, 0.3, 5.2, M.mahogL, 0.15, null, false); sphereAt(x+10, y+D-1.6, z+2.6, 0.55, M.brass); }
     boxAt(x, y, H-2.5, W, D, 2.5, M.mahog, 0.6);
     const inlay = canvasTex(512, 200, (c, w, h)=>{ c.fillStyle = '#2b4938'; c.fillRect(0,0,w,h); noise(c, w, h, 9000, '#0d1a12', 0.25); c.strokeStyle = '#c9a24e'; c.lineWidth = 3; c.strokeRect(10,10,w-20,h-20); });
-    const il = new THREE.Mesh(new THREE.PlaneGeometry(W-6, D-5.2), std('#ffffff', {map:inlay, roughness:0.62})); il.rotation.x = -Math.PI/2; il.position.set(x+W/2, H+0.03, y+D/2); il.receiveShadow = true; scene.add(il);
+    const il = new THREE.Mesh(new THREE.PlaneGeometry(W-6, D-5.2), std('#ffffff', {map:inlay, roughness:0.62})); il.rotation.x = -Math.PI/2; il.position.set(x+W/2, H+0.03, y+D/2); il.receiveShadow = true; put(il);
+    CUR = null;
     // табличка
     const plate = canvasTex(256, 72, (c, w, h)=>{ const g = c.createLinearGradient(0,0,0,h); g.addColorStop(0,'#efd38c'); g.addColorStop(1,'#a8843a'); c.fillStyle = g; c.fillRect(0,0,w,h); c.strokeStyle = 'rgba(80,50,10,.6)'; c.lineWidth = 3; c.strokeRect(3,3,w-6,h-6); c.fillStyle = a.color; c.beginPath(); c.arc(28, h/2, 9, 0, Math.PI*2); c.fill(); c.font = `700 36px ${FONT}`; c.fillStyle = '#2a1a10'; c.textBaseline = 'middle'; c.fillText(a.name, 48, h/2+2); });
     DYN['plate'+i] = plate;
-    const pm = new THREE.Mesh(new THREE.PlaneGeometry(22, 6.2), std('#ffffff', {map:plate, metalness:0.6, roughness:0.35})); pm.position.set(x+37, 12.4, y+D-1.8+0.05); scene.add(pm);
+    const pm = new THREE.Mesh(new THREE.PlaneGeometry(22, 6.2), std('#ffffff', {map:plate, metalness:0.6, roughness:0.35})); pm.position.set(x+37, 12.4, y+D-1.8+0.05); scene.add(pm); PLATES[i] = pm;
     // банкирская лампа
     const lx = x+55, ly = y+6;
+    grp('lamp'+i);
     cylAt(lx, ly, H, 3, 1, M.brass); cylAt(lx, ly, H+1, 0.5, 10, M.brass, 12);
     const shade = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 13, 24, 1, true, 0, Math.PI), M.lampGlass);
-    shade.rotation.z = Math.PI/2; shade.position.set(lx-1.5, H+11.6, ly+1.5); shade.castShadow = true; scene.add(shade);
-    const bulb = new THREE.Mesh(new THREE.PlaneGeometry(12, 4.4), M.bulb); bulb.rotation.x = Math.PI/2; bulb.position.set(lx-1.5, H+11.2, ly+1.5); scene.add(bulb);
+    shade.rotation.z = Math.PI/2; shade.position.set(lx-1.5, H+11.6, ly+1.5); shade.castShadow = true; put(shade);
+    const bulb = new THREE.Mesh(new THREE.PlaneGeometry(12, 4.4), M.bulb); bulb.rotation.x = Math.PI/2; bulb.position.set(lx-1.5, H+11.2, ly+1.5); put(bulb);
+    CUR = null;
     LAMPS.push([lx-1.5, ly+3, H+9, 'desk']);
-    // клавиатура, мышь, бумаги
+    // клавиатура, мышь, бумаги (группа «на столе» поднимается вместе с высотой стола)
+    grp('top'+i);
     boxAt(a.sx-8, y+2.4, H, 16, 5.5, 0.9, M.plastic, 0.3);
     const mouse = sphereAt(a.sx+12, y+5, H+0.5, 1.5, M.plastic); mouse.scale.set(1, 0.5, 1.4);
     boxAt(x+22, y+11, H, 7, 9, 0.5, M.paper, 0, null, false); boxAt(x+22.5, y+11.3, H+0.5, 6.6, 8.6, 0.3, M.paper, 0, null, false);
+    CUR = null;
     // монитор
+    grp('monitor'+i);
     boxAt(x+6, y+7, H, 7, 9, 0.6, M.dark, 0.25);
     boxAt(x+8.6, y+10.8, H, 1.4, 1.4, 6, M.dark);
     boxAt(x+5, y+3, H+3.5, 3, 17, 14, M.dark, 0.5);
+    CUR = null;
     const scr = canvasTex(320, 248, (c, w, h)=>drawScreenTex(c, w, h, a));
     DYN['screen'+i] = scr;
     const sm = new THREE.Mesh(new THREE.PlaneGeometry(15.6, 12.2), new THREE.MeshBasicMaterial({map:scr, toneMapped:false}));
-    sm.rotation.y = Math.PI/2; sm.position.set(x+8.05, H+3.5+7, y+3+8.5); scene.add(sm);
+    sm.rotation.y = Math.PI/2; sm.position.set(x+8.05, H+3.5+7, y+3+8.5); scene.add(sm); SCREENS[i] = sm;
     // кресло
     const sx = a.sx;
+    grp('chair'+i);
     cylAt(sx, SEAT_Y, 0, 4.5, 1, M.brass); cylAt(sx, SEAT_Y, 1, 0.9, 6, M.brass, 12);
     boxAt(sx-7, SEAT_Y-6.5, 7, 14, 14, 2.8, M.ox, 1.3);
     boxAt(sx-7.5, SEAT_Y-9.6, 8, 15, 3.2, 24, M.ox, 1.5);
     for (let k=0;k<4;k++) for (let j=0;j<3;j++) sphereAt(sx-5.2+k*3.4+(j%2)*1.7, SEAT_Y-6.35, 15+j*4.6, 0.45, M.mahogD);
+    CUR = null;
     // чашка
+    CUR = GRP['top'+i];
     const cup = cylAt(x+49, y+15, H, 1.9, 3.6, std(a.look.mug || '#f5f1ea', {roughness:0.25}));
     mugs[a.id] = cup;
-    if (a.id === 'aliya'){ bell = new THREE.Group(); const d = new THREE.Mesh(new THREE.SphereGeometry(2.5, 20, 10, 0, Math.PI*2, 0, Math.PI/2), M.brass); d.castShadow = true; bell.add(d); const b2 = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 2.9, 0.5, 20), M.mahogD); b2.position.y = -0.2; bell.add(b2); bell.position.set(x+32, H+0.5, y+17); scene.add(bell); }
+    if (a.id === 'aliya'){ bell = new THREE.Group(); const d = new THREE.Mesh(new THREE.SphereGeometry(2.5, 20, 10, 0, Math.PI*2, 0, Math.PI/2), M.brass); d.castShadow = true; bell.add(d); const b2 = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 2.9, 0.5, 20), M.mahogD); b2.position.y = -0.2; bell.add(b2); bell.position.set(x+32, H+0.5, y+17); put(bell); }
+    CUR = null;
   }
   function buildTable(){
     const {x, y, r} = TABLE;
+    grp('table');
     cylAt(x, y, 0, 7, 1.2, M.mahogD); cylAt(x, y, 1, 2.4, 21.6, M.mahogD, 20);
     cylAt(x, y, 22.6, r, 2.2, M.mahog, 64);
+    grp('tableTop');
     const lt = boxAt(x-8, y-10, 24.8, 11, 8, 0.6, M.steel, 0.2);
-    const ls = new THREE.Mesh(new THREE.BoxGeometry(11, 7.2, 0.4), M.dark); ls.position.set(x-2.5, 28.4, y-10.2); ls.rotation.x = -0.25; ls.castShadow = true; scene.add(ls);
+    const ls = new THREE.Mesh(new THREE.BoxGeometry(11, 7.2, 0.4), M.dark); ls.position.set(x-2.5, 28.4, y-10.2); ls.rotation.x = -0.25; ls.castShadow = true; put(ls);
     boxAt(x+5, y+4, 24.8, 8, 6, 0.3, M.paper, 0, null, false);
     cylAt(x-10, y+8, 24.8, 1.8, 3.4, M.ceramic); cylAt(x+12, y-6, 24.8, 1.5, 3.8, M.glass); cylAt(x+12, y-6, 24.9, 1.3, 1.6, M.amber);
-    void lt;
+    void lt; CUR = null;
   }
   function buildSofa(){
+    grp('sofa');
     boxAt(3, 149, 1.5, 26, 50, 9.5, M.cog, 1.8);
     boxAt(2, 146, 1.5, 8, 56, 27, M.cog, 2.5);
     boxAt(3, 145.5, 1.5, 27, 7, 18, M.cogL, 3);
     boxAt(3, 195.5, 1.5, 27, 7, 18, M.cogL, 3);
-    for (const yy of [149, 199]){ const rc = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 27, 24), M.cogL); rc.rotation.z = Math.PI/2; rc.position.set(16.5, 19, yy); rc.castShadow = true; rc.receiveShadow = true; scene.add(rc); }
+    for (const yy of [149, 199]){ const rc = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 27, 24), M.cogL); rc.rotation.z = Math.PI/2; rc.position.set(16.5, 19, yy); rc.castShadow = true; rc.receiveShadow = true; put(rc); }
     boxAt(10, 153, 11, 19, 21, 4, M.cogL, 1.8); boxAt(10, 175, 11, 19, 20, 4, M.cogL, 1.8);
     for (let row=0; row<3; row++) for (let yy=151; yy<=196; yy+=5.6) sphereAt(10.05, yy + (row%2)*2.8, 16.8 + row*4.4, 0.55, M.mahogD);
     for (let xx=5; xx<29; xx+=2.4){ sphereAt(xx, 152.6, 3.6, 0.35, M.brass); sphereAt(xx, 202.6, 3.6, 0.35, M.brass); }
     const p1 = boxAt(11, 157, 15, 4, 10, 9, std('#1e2b4f', {roughness:0.9}), 2.4); p1.rotation.x = 0.18;
     const p2 = boxAt(11, 184, 15, 4, 9, 8, std('#7a2028', {roughness:0.9}), 2.4); p2.rotation.x = -0.15;
     for (const fx of [4, 28]) for (const fy of [148, 200]) cylAt(fx, fy, 0, 0.9, 1.5, M.mahogD, 10);
+    CUR = null;
   }
   function buildArmchair(){
+    grp('armchair');
     boxAt(375, 159, 1, 24, 18, 10, M.cog, 1.6);
     boxAt(397, 157, 1, 7, 22, 27, M.cog, 2.6);
     boxAt(375, 155.5, 1, 27, 5.5, 17, M.cogL, 2.6); boxAt(375, 175, 1, 27, 5.5, 17, M.cogL, 2.6);
-    for (const yy of [158.2, 177.8]){ const rc = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 27, 20), M.cogL); rc.rotation.z = Math.PI/2; rc.position.set(388.5, 17.5, yy); rc.castShadow = true; scene.add(rc); }
+    for (const yy of [158.2, 177.8]){ const rc = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 27, 20), M.cogL); rc.rotation.z = Math.PI/2; rc.position.set(388.5, 17.5, yy); rc.castShadow = true; put(rc); }
     boxAt(377, 161, 11, 20, 14, 3.4, M.cogL, 1.6);
     for (let xx=376; xx<402; xx+=2.4) sphereAt(xx, 180.6, 3, 0.35, M.brass);
+    CUR = null;
   }
   function buildSideboard(){
+    grp('sideboard');
     boxAt(2, 86, 0, 18, 32, 21, M.mahog, 0.5);
     boxAt(1, 85, 21, 20, 34, 2, M.mahogL, 0.4);
     for (const yy of [96.8, 107.8]) boxAt(19.9, yy, 3, 0.3, 0.6, 16, M.mahogD, 0, null, false);
     for (const [yy, zz] of [[95.6, 11], [98.4, 11], [106.6, 11], [109.4, 11]]) sphereAt(20.2, yy, zz, 0.6, M.brass);
+    grp('sideTop');
     boxAt(5, 90, 23, 11, 11, 13, M.steel, 1);
     boxAt(6, 92, 36, 9, 7, 1.2, M.dark, 0.3);
     sphereAt(16.1, 96, 31.5, 0.6, std('#4fd18b', {emissive:new THREE.Color('#4fd18b'), emissiveIntensity:1.5}));
@@ -1989,6 +2015,7 @@ const O3 = (()=>{
     cylAt(10, 111, 23, 5, 0.4, M.steel, 32);
     cylAt(9, 110.5, 23.4, 2.3, 4.6, M.glass); cylAt(9, 110.5, 23.5, 2.1, 3, M.amber); cylAt(9, 110.5, 28, 1, 1.6, M.glass, 16); sphereAt(9, 110.5, 30.4, 1.2, M.glass);
     cylAt(12.6, 113.6, 23.4, 1.2, 2.2, M.glass, 16); cylAt(8, 114.6, 23.4, 1.2, 2.2, M.glass, 16);
+    CUR = null;
     // глобус
     const top = new THREE.Vector3(8.5, 15, 126);
     for (const [fx, fy] of [[4,122],[13.5,123.5],[8,131]]){ const f = new THREE.Vector3(fx, 0, fy); const len = top.distanceTo(f); const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, len, 8), M.mahogD); leg.position.copy(top).add(f).multiplyScalar(0.5); leg.lookAt(top); leg.rotateX(Math.PI/2); leg.castShadow = true; scene.add(leg); }
@@ -1998,6 +2025,7 @@ const O3 = (()=>{
     const mer = new THREE.Mesh(new THREE.TorusGeometry(7.4, 0.35, 8, 40, Math.PI*1.3), M.brass); mer.position.set(8.5, 23, 126); mer.rotation.set(0, Math.PI/4, -0.6); scene.add(mer);
   }
   function buildBookcase(){
+    grp('bookcase');
     boxAt(5, 1, 0, 26, 2, 68, M.mahogD); boxAt(5, 1, 0, 1.6, 18, 68, M.mahog); boxAt(29.4, 1, 0, 1.6, 18, 68, M.mahog);
     boxAt(4, 0.5, 66.5, 28, 19.5, 2.4, M.mahogL, 0.4); boxAt(5, 1, 0, 26, 18, 3, M.mahog);
     const cols = ['#6a2324','#1e2b4f','#2c4a39','#8a6a2a','#5a3a28','#d9c9a6','#3a2a4a','#7a2028','#2a3c5e'].map(c=>std(c, {roughness:0.75}));
@@ -2012,6 +2040,7 @@ const O3 = (()=>{
         bx += w + 0.12;
       }
     }
+    CUR = null;
   }
   function buildFloorLamp(){
     cylAt(12, 138, 0, 4, 1, M.brass); cylAt(12, 138, 1, 0.6, 49, M.brass, 12);
@@ -2026,7 +2055,7 @@ const O3 = (()=>{
       const ang = k/n*Math.PI*2 + (k%3)*0.3, lean = 0.35 + (k%4)*0.12, len = (big ? 9 : 7) + (k%3)*1.6;
       const leaf = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), k%2 ? M.leaf : M.leaf2);
       leaf.scale.set(1.8, len*0.5, 0.5);
-      const g = new THREE.Group(); g.position.set(x, h, y); g.rotation.y = ang; leaf.position.set(0, len*0.45, 0); g.rotation.z = lean; g.add(leaf); leaf.castShadow = true; scene.add(g);
+      const g = new THREE.Group(); g.position.set(x, h, y); g.rotation.y = ang; leaf.position.set(0, len*0.45, 0); g.rotation.z = lean; g.add(leaf); leaf.castShadow = true; put(g);
     }
   }
 
@@ -2383,8 +2412,8 @@ const O3 = (()=>{
     modelsSettled = true; avatarsDone = false;
   }
   // модель хранится одним .json: glTF + двоичный буфер в base64; здесь собираем GLB в памяти и отдаём загрузчику
-  async function fetchModel(loader, name){
-    const res = await fetch(`./models/${name}.json`); if (!res.ok) throw new Error('HTTP ' + res.status);
+  async function fetchModel(loader, name, dir = './models/'){
+    const res = await fetch(`${dir}${name}.json`); if (!res.ok) throw new Error('HTTP ' + res.status);
     const j = await res.json(), buf = j.buffers && j.buffers[0], b64 = buf && buf.extras && buf.extras.base64;
     if (!b64) throw new Error('в модели нет буфера');
     delete buf.extras;
@@ -2394,7 +2423,58 @@ const O3 = (()=>{
     dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, total, true);
     dv.setUint32(12, js.length + jp, true); dv.setUint32(16, 0x4E4F534A, true); u8.set(js, 20); u8.fill(0x20, 20 + js.length, 20 + js.length + jp);
     const o = 20 + js.length + jp; dv.setUint32(o, bin.length + bp, true); dv.setUint32(o + 4, 0x004E4942, true); u8.set(bin, o + 8);
-    return loader.parseAsync(out, './models/');
+    return loader.parseAsync(out, dir);
+  }
+  // ---------- мебель из моделей: заменяет процедурные группы, при ошибке остаётся старая мебель ----------
+  // перед модели — +X; w — размер по X сцены, d — по Y сцены, h — высота; uniform — пропорции модели по одному размеру
+  const DESK_TOP = 23;
+  const PROP_DEFS = [
+    {file:'wooden_desk', mat:'wood', places: DX.map((x, i)=>({hide:['desk'+i], cx:x+31, cy:DESK_Y+12, w:64, d:26, h:DESK_TOP, rot:-Math.PI/2, after:()=>{
+      GRP['top'+i].position.y = DESK_TOP - DESK_H; GRP['lamp'+i].position.y = DESK_TOP - DESK_H;
+      const pm = PLATES[i]; pm.position.set(x+37, DESK_TOP + 3.3, DESK_Y + 12 + 13 - 2.2); pm.rotation.x = -0.22; pm.scale.setScalar(0.82);
+      boxAt(x+27.5, DESK_Y + 12 + 13 - 3.6, DESK_TOP, 19, 2.6, 1, M.mahogD, 0.3);
+    }}))},
+    {file:'office_chair', mat:'leather', places: AG_LIST.map((a, i)=>({hide:['chair'+i], cx:a.sx, cy:SEAT_Y - 1, h:21.5, uniform:true, rot:-Math.PI/2}))},
+    {file:'monitor', mat:'plastic', places: DX.map((x, i)=>({hide:['monitor'+i], cx:x+8.5, cy:DESK_Y+11.5, z:DESK_TOP, h:15.5, uniform:true, rot:0, screen:{i, x:0.099, y:0.468, w:0.92, h:0.56}}))},
+    {file:'desk_lamp', mat:'brass', places: DX.map((x, i)=>({hide:['lamp'+i], cx:x+55, cy:DESK_Y+6, z:DESK_TOP, h:13, uniform:true, rot:-Math.PI/2}))},
+    {file:'snake_plant', mat:'plant', places: PLANTS.map(([x, y, big], k)=>({hide:['plant'+k], cx:x, cy:y, h:big ? 27 : 21, uniform:true, rot:k*1.3}))},
+    {file:'wooden_bookshelf', mat:'wood', places:[{hide:['bookcase'], cx:18, cy:9.5, h:68, uniform:true, rot:-Math.PI/2}]},
+    {file:'wooden_cabinet', mat:'wood', places:[{hide:['sideboard'], cx:10, cy:102, w:16, d:33, h:21, rot:0, after:()=>{ GRP.sideTop.position.y = -2; }}]},
+    {file:'wooden_round_table', mat:'wood', places:[{hide:['table'], cx:TABLE.x, cy:TABLE.y, w:54, d:54, h:24.8, rot:0}]},
+    {file:'leather_sofa', mat:'leather', places:[{hide:['sofa'], cx:15.5, cy:174, d:58, uniform:'d', rot:0}]},
+    {file:'leather_armchair', mat:'leather', places:[{hide:['armchair'], cx:390, cy:168, h:21, uniform:true, rot:Math.PI}]},
+  ];
+  const PROP_MAT = {wood:{roughness:0.5, clearcoat:0.45, clearcoatRoughness:0.35}, leather:{roughness:0.55, clearcoat:0.25, clearcoatRoughness:0.5, sheen:0.3}, brass:{roughness:0.35, metalness:0.25, clearcoat:0.6}, plastic:{roughness:0.4}, plant:{roughness:0.75}};
+  async function loadProps(){
+    let GLTFLoader = null;
+    try { ({GLTFLoader} = await import('three/addons/loaders/GLTFLoader.js')); } catch(e){ return; }
+    const loader = new GLTFLoader();
+    await Promise.all(PROP_DEFS.map(async def=>{
+      let g;
+      try { g = await fetchModel(loader, def.file, './models/props/'); }
+      catch(e){ console.warn('[3D] мебель', def.file, 'не загрузилась — остаётся простая', e); return; }
+      // материал: отражения и лак по типу поверхности
+      g.scene.traverse(o=>{ if (!o.isMesh) return; const m0 = o.material; const o2 = PROP_MAT[def.mat] || {};
+        const m = new THREE.MeshPhysicalMaterial({map:m0.map, roughness:o2.roughness ?? 0.6, metalness:o2.metalness ?? 0, clearcoat:o2.clearcoat || 0, clearcoatRoughness:o2.clearcoatRoughness ?? 0.4, sheen:o2.sheen || 0, sheenColor:new THREE.Color('#ffd9b8')});
+        o.material = m; o.castShadow = true; o.receiveShadow = true; });
+      g.scene.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(g.scene), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+      for (const pl of def.places){
+        const side = Math.abs(Math.sin(pl.rot)) > 0.5;          // ±90°: локальная Z идёт вдоль X сцены
+        let kx, ky, kz;
+        if (pl.uniform === 'd'){ const k = pl.d / (side ? size.x : size.z); kx = ky = kz = k; }
+        else if (pl.uniform){ const k = pl.h / size.y; kx = ky = kz = k; }
+        else { kx = side ? pl.d / size.x : pl.w / size.x; kz = side ? pl.w / size.z : pl.d / size.z; ky = pl.h / size.y; }
+        const wrap = new THREE.Group(), sc = new THREE.Group(), inst = g.scene.clone(true);
+        inst.position.set(-c.x, -box.min.y, -c.z); sc.scale.set(kx, ky, kz); sc.add(inst); wrap.add(sc);
+        wrap.position.set(pl.cx, pl.z || 0, pl.cy); wrap.rotation.y = pl.rot; scene.add(wrap);
+        for (const h of pl.hide) if (GRP[h]) GRP[h].visible = false;
+        if (pl.screen){ const sm = SCREENS[pl.screen.i]; const sc0 = pl.screen;
+          const v = new THREE.Vector3(sc0.x - c.x, sc0.y - box.min.y, -c.z).multiply(new THREE.Vector3(kx, ky, kz)).applyAxisAngle(new THREE.Vector3(0, 1, 0), pl.rot);
+          sm.position.set(pl.cx + v.x, (pl.z || 0) + v.y, pl.cy + v.z); sm.rotation.y = pl.rot + Math.PI/2; sm.scale.set(sc0.w * kz / 15.6, sc0.h * ky / 12.2, 1); }
+        if (pl.after) pl.after();
+      }
+    }));
   }
   function makeModelFigure(a, src, r){
     const geo = src.geometry.clone(), pos = geo.attributes.position, n = pos.count;
