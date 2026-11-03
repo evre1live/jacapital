@@ -91,14 +91,15 @@ export class Office extends EventEmitter {
     this.touch();
   }
   // подключение биржевого счёта: ключи, баланс, сверка позиций
-  async connectAccount(id){
+  async connectAccount(id, opts = {}){
     const acc = this.accounts[id];
     if (!acc || acc.kind !== 'exchange' || !acc.configured || !acc.broker) return false;
     try { await acc.broker.init(Object.values(this.market.coins).map(c => c.symbol)); }
     catch (e) {
       const err = describeError(e), first = acc.error !== err;
       acc.ready = false; acc.error = err; acc.rawError = String(e && e.message || e).slice(0, 400); acc.failedAt = Date.now();
-      if (first) console.warn(`[account] ${acc.label}: ${err} | ответ биржи: ${acc.rawError.slice(0, 200)}`);
+      // в лог: новая ошибка, ручная проверка из интерфейса или та же ошибка раз в 5 минут
+      if (first || opts.manual || Date.now() - (acc.loggedAt || 0) > 5 * 60000){ acc.loggedAt = Date.now(); console.warn(`[account] ${acc.label}${opts.manual ? ' (проверка из интерфейса)' : first ? '' : ' (всё ещё)'}: ${err} | ответ биржи: ${acc.rawError.slice(0, 200)}`); }
       this.emit('accounts'); return false;
     }
     const wasReady = acc.ready; acc.ready = true; acc.error = '';

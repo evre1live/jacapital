@@ -121,7 +121,7 @@ wss.on('connection', ws => {
           if (!a || a.kind !== 'exchange') break;
           if (!a.configured){ sendTo(ws, {t: 'toast', text: a.error}); break; }
           sendTo(ws, {t: 'toast', text: `Проверяю «${a.label}»…`});
-          const ok = await office.connectAccount(a.id);
+          const ok = await office.connectAccount(a.id, {manual: true});
           sendTo(ws, {t: 'toast', text: ok ? `«${a.label}» подключён` : `«${a.label}»: ${a.error}`});
           sendTo(ws, {t: 'accounts', accounts: office.accountsPublic(), active: office.state.active});
           break;
