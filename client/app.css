@@ -1,8 +1,8 @@
-/* JA Capital — интерфейс в духе Apple: системный шрифт, «жидкое стекло», светлая и тёмная темы.
+/* JA Capital — интерфейс в духе Apple: «жидкое стекло», светлая и тёмная темы; палитра концепта «Манхэттен» (графит, копчёный дуб, бронза-шампань).
    Тема ставится атрибутом data-theme на <html>; светлая — день за окнами офиса, тёмная — ночь. */
 :root{
   --f-body:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,"Segoe UI",Roboto,sans-serif;
-  --f-display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,"Segoe UI",Roboto,sans-serif;
+  --f-display:"Manrope",-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,"Segoe UI",Roboto,sans-serif;
   --f-mono:var(--f-body);
   --r-xl:24px; --r-lg:18px; --r-md:13px; --r-sm:9px;
   --c-nika:#d4573a; --c-boris:#1f9e98; --c-timur:#d9a21b; --c-aliya:#6e7cf0;
@@ -10,46 +10,46 @@
 }
 :root,[data-theme="light"]{
   color-scheme:light;
-  --bg:#eef1f6;
+  --bg:#f1ede7;
   --wall:
-    radial-gradient(1100px 700px at 6% -8%, #c9dcff 0%, transparent 62%),
-    radial-gradient(900px 620px at 98% -4%, #ffdcc8 0%, transparent 58%),
-    radial-gradient(1000px 760px at 72% 108%, #dcd5ff 0%, transparent 60%),
-    radial-gradient(700px 520px at 18% 96%, #c9f0e6 0%, transparent 60%),
-    linear-gradient(180deg,#f5f7fb,#e8ecf4);
-  --glass:rgba(255,255,255,.56);
-  --glass-strong:rgba(255,255,255,.78);
+    radial-gradient(1100px 700px at 6% -8%, #efe4d2 0%, transparent 62%),
+    radial-gradient(900px 620px at 98% -4%, #f4e9dc 0%, transparent 58%),
+    radial-gradient(1000px 760px at 72% 108%, #e2dbd0 0%, transparent 60%),
+    radial-gradient(700px 520px at 18% 96%, #e9e4da 0%, transparent 60%),
+    linear-gradient(180deg,#f7f4ef,#ebe6de);
+  --glass:rgba(255,252,247,.58);
+  --glass-strong:rgba(255,252,247,.82);
   --glass-2:rgba(255,255,255,.52);
   --glass-3:rgba(255,255,255,.9);
   --glass-border:rgba(255,255,255,.72);
   --rim-a:rgba(255,255,255,1); --rim-b:rgba(255,255,255,.25); --rim-c:rgba(255,255,255,.6);
-  --glass-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.35),0 12px 36px rgba(28,44,90,.10),0 2px 8px rgba(28,44,90,.06);
-  --tile-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 3px rgba(28,44,90,.06);
+  --glass-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.35),0 12px 36px rgba(60,44,24,.10),0 2px 8px rgba(60,44,24,.06);
+  --tile-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 3px rgba(60,44,24,.06);
   --fill:rgba(118,118,128,.12); --fill-2:rgba(118,118,128,.18); --thumb:#ffffff;
   --thumb-shadow:0 3px 8px rgba(0,0,0,.12),0 1px 1px rgba(0,0,0,.05),inset 0 1px 0 #fff;
   --hair:rgba(60,60,67,.10); --line:rgba(60,60,67,.14); --line-2:rgba(60,60,67,.24);
-  --text:#1d1d1f; --muted:#5f5f66; --faint:#8a8a91;
-  --accent:#007aff; --accent-ink:#ffffff; --accent-soft:rgba(0,122,255,.12);
+  --text:#1c1a18; --muted:#615b54; --faint:#8a847c;
+  --accent:#8a6a3e; --accent-ink:#ffffff; --accent-soft:rgba(138,106,62,.13);
   --up:#1f9a4a; --down:#e0352b; --warn:#c77700;
-  --panel:#ffffff; --panel-2:#f2f3f7;
+  --panel:#fffdf9; --panel-2:#f3efe8;
   --grid:rgba(60,60,67,.09); --ref:rgba(29,29,31,.32);
   --ema9:#ff9500; --ema21:#5856d6;
-  --stage:radial-gradient(120% 95% at 50% 0%, #fbfcfe 0%, #e6ebf3 70%, #dfe5ee 100%);
-  --scrim:rgba(240,243,248,.45);
+  --stage:radial-gradient(120% 95% at 50% 0%, #fbf9f6 0%, #ebe6de 70%, #e3ddd3 100%);
+  --scrim:rgba(244,240,234,.45);
   --switch-on:#34c759;
   --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235f5f66' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 [data-theme="dark"]{
   color-scheme:dark;
-  --bg:#07080d;
+  --bg:#0a0a0a;
   --wall:
-    radial-gradient(1100px 700px at 4% -10%, rgba(58,86,210,.42) 0%, transparent 60%),
-    radial-gradient(900px 620px at 100% -2%, rgba(150,62,140,.30) 0%, transparent 56%),
-    radial-gradient(1000px 760px at 64% 112%, rgba(24,132,150,.26) 0%, transparent 60%),
-    radial-gradient(700px 520px at 14% 100%, rgba(210,120,40,.16) 0%, transparent 60%),
-    linear-gradient(180deg,#0b0d16,#05060a);
-  --glass:rgba(30,32,44,.50);
-  --glass-strong:rgba(34,36,48,.80);
+    radial-gradient(1100px 700px at 4% -10%, rgba(200,150,90,.20) 0%, transparent 60%),
+    radial-gradient(900px 620px at 100% -2%, rgba(120,92,62,.22) 0%, transparent 56%),
+    radial-gradient(1000px 760px at 64% 112%, rgba(70,60,52,.30) 0%, transparent 60%),
+    radial-gradient(700px 520px at 14% 100%, rgba(168,139,94,.12) 0%, transparent 60%),
+    linear-gradient(180deg,#121110,#070707);
+  --glass:rgba(30,28,26,.52);
+  --glass-strong:rgba(34,32,30,.84);
   --glass-2:rgba(255,255,255,.055);
   --glass-3:rgba(255,255,255,.16);
   --glass-border:rgba(255,255,255,.12);
@@ -59,13 +59,13 @@
   --fill:rgba(118,118,128,.24); --fill-2:rgba(118,118,128,.32); --thumb:rgba(255,255,255,.2);
   --thumb-shadow:0 3px 10px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.22);
   --hair:rgba(255,255,255,.07); --line:rgba(255,255,255,.11); --line-2:rgba(255,255,255,.2);
-  --text:#f5f5f7; --muted:#a1a1a8; --faint:#75757c;
-  --accent:#0a84ff; --accent-ink:#ffffff; --accent-soft:rgba(10,132,255,.2);
+  --text:#f3efe9; --muted:#aaa39a; --faint:#7c766e;
+  --accent:#c8a97e; --accent-ink:#141414; --accent-soft:rgba(200,169,126,.18);
   --up:#30d158; --down:#ff453a; --warn:#ffd60a;
-  --panel:#1c1c22; --panel-2:#2a2a31;
+  --panel:#1c1b1a; --panel-2:#2a2826;
   --grid:rgba(255,255,255,.075); --ref:rgba(245,245,247,.34);
   --ema9:#ff9f0a; --ema21:#8e8bff;
-  --stage:radial-gradient(120% 95% at 50% 0%, #1a2034 0%, #0d1019 72%, #0a0c13 100%);
+  --stage:radial-gradient(120% 95% at 50% 0%, #1f1c19 0%, #100f0e 72%, #0b0a09 100%);
   --scrim:rgba(6,7,12,.5);
   --switch-on:#30d158;
   --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a1a1a8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");

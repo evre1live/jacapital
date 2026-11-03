@@ -15,11 +15,11 @@
   document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light'); document.documentElement.setAttribute('data-theme-mode', m); })();
 </script>
 <style>
-/* JA Capital — интерфейс в духе Apple: системный шрифт, «жидкое стекло», светлая и тёмная темы.
+/* JA Capital — интерфейс в духе Apple: «жидкое стекло», светлая и тёмная темы; палитра концепта «Манхэттен» (графит, копчёный дуб, бронза-шампань).
    Тема ставится атрибутом data-theme на <html>; светлая — день за окнами офиса, тёмная — ночь. */
 :root{
   --f-body:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,"Segoe UI",Roboto,sans-serif;
-  --f-display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,"Segoe UI",Roboto,sans-serif;
+  --f-display:"Manrope",-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,"Segoe UI",Roboto,sans-serif;
   --f-mono:var(--f-body);
   --r-xl:24px; --r-lg:18px; --r-md:13px; --r-sm:9px;
   --c-nika:#d4573a; --c-boris:#1f9e98; --c-timur:#d9a21b; --c-aliya:#6e7cf0;
@@ -27,46 +27,46 @@
 }
 :root,[data-theme="light"]{
   color-scheme:light;
-  --bg:#eef1f6;
+  --bg:#f1ede7;
   --wall:
-    radial-gradient(1100px 700px at 6% -8%, #c9dcff 0%, transparent 62%),
-    radial-gradient(900px 620px at 98% -4%, #ffdcc8 0%, transparent 58%),
-    radial-gradient(1000px 760px at 72% 108%, #dcd5ff 0%, transparent 60%),
-    radial-gradient(700px 520px at 18% 96%, #c9f0e6 0%, transparent 60%),
-    linear-gradient(180deg,#f5f7fb,#e8ecf4);
-  --glass:rgba(255,255,255,.56);
-  --glass-strong:rgba(255,255,255,.78);
+    radial-gradient(1100px 700px at 6% -8%, #efe4d2 0%, transparent 62%),
+    radial-gradient(900px 620px at 98% -4%, #f4e9dc 0%, transparent 58%),
+    radial-gradient(1000px 760px at 72% 108%, #e2dbd0 0%, transparent 60%),
+    radial-gradient(700px 520px at 18% 96%, #e9e4da 0%, transparent 60%),
+    linear-gradient(180deg,#f7f4ef,#ebe6de);
+  --glass:rgba(255,252,247,.58);
+  --glass-strong:rgba(255,252,247,.82);
   --glass-2:rgba(255,255,255,.52);
   --glass-3:rgba(255,255,255,.9);
   --glass-border:rgba(255,255,255,.72);
   --rim-a:rgba(255,255,255,1); --rim-b:rgba(255,255,255,.25); --rim-c:rgba(255,255,255,.6);
-  --glass-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.35),0 12px 36px rgba(28,44,90,.10),0 2px 8px rgba(28,44,90,.06);
-  --tile-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 3px rgba(28,44,90,.06);
+  --glass-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.35),0 12px 36px rgba(60,44,24,.10),0 2px 8px rgba(60,44,24,.06);
+  --tile-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 3px rgba(60,44,24,.06);
   --fill:rgba(118,118,128,.12); --fill-2:rgba(118,118,128,.18); --thumb:#ffffff;
   --thumb-shadow:0 3px 8px rgba(0,0,0,.12),0 1px 1px rgba(0,0,0,.05),inset 0 1px 0 #fff;
   --hair:rgba(60,60,67,.10); --line:rgba(60,60,67,.14); --line-2:rgba(60,60,67,.24);
-  --text:#1d1d1f; --muted:#5f5f66; --faint:#8a8a91;
-  --accent:#007aff; --accent-ink:#ffffff; --accent-soft:rgba(0,122,255,.12);
+  --text:#1c1a18; --muted:#615b54; --faint:#8a847c;
+  --accent:#8a6a3e; --accent-ink:#ffffff; --accent-soft:rgba(138,106,62,.13);
   --up:#1f9a4a; --down:#e0352b; --warn:#c77700;
-  --panel:#ffffff; --panel-2:#f2f3f7;
+  --panel:#fffdf9; --panel-2:#f3efe8;
   --grid:rgba(60,60,67,.09); --ref:rgba(29,29,31,.32);
   --ema9:#ff9500; --ema21:#5856d6;
-  --stage:radial-gradient(120% 95% at 50% 0%, #fbfcfe 0%, #e6ebf3 70%, #dfe5ee 100%);
-  --scrim:rgba(240,243,248,.45);
+  --stage:radial-gradient(120% 95% at 50% 0%, #fbf9f6 0%, #ebe6de 70%, #e3ddd3 100%);
+  --scrim:rgba(244,240,234,.45);
   --switch-on:#34c759;
   --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235f5f66' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 [data-theme="dark"]{
   color-scheme:dark;
-  --bg:#07080d;
+  --bg:#0a0a0a;
   --wall:
-    radial-gradient(1100px 700px at 4% -10%, rgba(58,86,210,.42) 0%, transparent 60%),
-    radial-gradient(900px 620px at 100% -2%, rgba(150,62,140,.30) 0%, transparent 56%),
-    radial-gradient(1000px 760px at 64% 112%, rgba(24,132,150,.26) 0%, transparent 60%),
-    radial-gradient(700px 520px at 14% 100%, rgba(210,120,40,.16) 0%, transparent 60%),
-    linear-gradient(180deg,#0b0d16,#05060a);
-  --glass:rgba(30,32,44,.50);
-  --glass-strong:rgba(34,36,48,.80);
+    radial-gradient(1100px 700px at 4% -10%, rgba(200,150,90,.20) 0%, transparent 60%),
+    radial-gradient(900px 620px at 100% -2%, rgba(120,92,62,.22) 0%, transparent 56%),
+    radial-gradient(1000px 760px at 64% 112%, rgba(70,60,52,.30) 0%, transparent 60%),
+    radial-gradient(700px 520px at 14% 100%, rgba(168,139,94,.12) 0%, transparent 60%),
+    linear-gradient(180deg,#121110,#070707);
+  --glass:rgba(30,28,26,.52);
+  --glass-strong:rgba(34,32,30,.84);
   --glass-2:rgba(255,255,255,.055);
   --glass-3:rgba(255,255,255,.16);
   --glass-border:rgba(255,255,255,.12);
@@ -76,13 +76,13 @@
   --fill:rgba(118,118,128,.24); --fill-2:rgba(118,118,128,.32); --thumb:rgba(255,255,255,.2);
   --thumb-shadow:0 3px 10px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.22);
   --hair:rgba(255,255,255,.07); --line:rgba(255,255,255,.11); --line-2:rgba(255,255,255,.2);
-  --text:#f5f5f7; --muted:#a1a1a8; --faint:#75757c;
-  --accent:#0a84ff; --accent-ink:#ffffff; --accent-soft:rgba(10,132,255,.2);
+  --text:#f3efe9; --muted:#aaa39a; --faint:#7c766e;
+  --accent:#c8a97e; --accent-ink:#141414; --accent-soft:rgba(200,169,126,.18);
   --up:#30d158; --down:#ff453a; --warn:#ffd60a;
-  --panel:#1c1c22; --panel-2:#2a2a31;
+  --panel:#1c1b1a; --panel-2:#2a2826;
   --grid:rgba(255,255,255,.075); --ref:rgba(245,245,247,.34);
   --ema9:#ff9f0a; --ema21:#8e8bff;
-  --stage:radial-gradient(120% 95% at 50% 0%, #1a2034 0%, #0d1019 72%, #0a0c13 100%);
+  --stage:radial-gradient(120% 95% at 50% 0%, #1f1c19 0%, #100f0e 72%, #0b0a09 100%);
   --scrim:rgba(6,7,12,.5);
   --switch-on:#30d158;
   --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a1a1a8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -407,6 +407,8 @@ html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,
 .btsub{font-size:11.5px;color:var(--muted);white-space:normal;margin-top:2px}
 
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
 </head>
 <body>
 <header class="topbar">
@@ -1777,7 +1779,7 @@ const O3 = (()=>{
         buildMaterials(); buildRoom(); buildFurniture(); buildDecor(); buildLights();
         for (const a of AG_LIST) FIG[a.id] = makeFigure(a);
         buildPlanes();
-        applyDay();
+        setStyle(STYLE0, {redraw:false});
         loadModels();
         loadProps();
         loadWindowPhotos();
@@ -1826,49 +1828,276 @@ const O3 = (()=>{
   function noise(c, w, h, n, col, a){ c.fillStyle = col; c.globalAlpha = a; for (let i=0;i<n;i++){ c.fillRect(Math.random()*w, Math.random()*h, 1+Math.random()*2, 1); } c.globalAlpha = 1; }
   const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif', MONO = '"SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace';
 
+
+  // ================= СТИЛИ ИНТЕРЬЕРА =================
+  // Каждый стиль задаёт отделку (стены, панели, панели внизу, пол), дерево отделки, металл, текстиль, ковры и свет.
+  // Текстуры рисуются заново при смене стиля; геометрия комнаты и мебель не меняются.
+  const STYLES = {
+    club: {name:'Клуб (сейчас)',
+      floor:{kind:'planks', tones:['#6a432c','#613c27','#72492f','#5b3824','#674029','#6e452c'], seam:'rgba(20,10,5,.55)', grain:'#2a170d', rough:0.48, clear:0.35},
+      wall:{kind:'walnut', c:['#4a2a19','#563320','#462817'], rough:0.45, clear:0.5},
+      main:{kind:'plaid', base:'#18203a', bands:'rgba(190,150,100,.55)|rgba(205,165,110,.75)|rgba(70,45,30,.6)|rgba(180,140,92,.42)|rgba(40,30,30,.5)', rough:0.95, clear:0},
+      alt:{kind:'wood', c:['#4a2a19','#563320','#462817'], tint:'#d8c8b8', rough:0.42, clear:0.55},
+      wains:{kind:'panels', c:['#55321f','#3a2214'], rough:0.42, clear:0.45},
+      trim:['#5a2e1d','#71402a','#3b1d12'], metal:['#caa04c', 0.28], gilt:'#d4ae5c', drape:['#5e1a24','#c45a68'], cap:'#ece2cd',
+      rug:{kind:'persian'}, art:'landscape', board:{bg:'#21402f', grain:'#0b1a10', title:'#d9b867'},
+      light:{lamp:'#ffd79a', floor:'#ffc98a', mul:1, spot:'#ffdcaa', expDay:1.0, expNight:1.08, envDay:0.62, envNight:0.32, hemiNight:'#ffe9cf'}},
+    mayfair: {name:'Мэйфэр',
+      floor:{kind:'herring', tones:['#4b3020','#57381f','#603f27','#452a1a','#5a3a25'], seam:'rgba(15,8,4,.6)', grain:'#22130a', rough:0.42, clear:0.5},
+      wall:{kind:'lacquer', c:['#1d3a2e','#234537'], rough:0.22, clear:0.9},
+      main:{kind:'plaid', base:'#16271f', bands:'rgba(25,35,70,.75)|rgba(140,40,40,.85)|rgba(10,18,14,.6)|rgba(28,40,78,.55)|rgba(196,160,90,.55)', rough:0.95, clear:0},
+      alt:{kind:'wood', c:['#4e2c1a','#5d3622','#472716'], tint:'#e4d4c2', rough:0.38, clear:0.6},
+      wains:{kind:'panels', c:['#24443a','#163026'], rough:0.25, clear:0.85},
+      trim:['#4a2a1a','#6a3e26','#2e180e'], metal:['#b48c4c', 0.36], gilt:'#c9a256', drape:['#4a1018','#a8404e'], cap:'#e7dcc4',
+      art:'landscape', board:{bg:'#1d3a2e', grain:'#0b1a10', title:'#d4b06a'},
+      rug:{kind:'persian', pal:{ivory:'#e0cfae', cream:'#ecdfc4', navy:'#1d2a4a', navy2:'#2a3b63', blue:'#4d6e98', sky:'#93abc6', gold:'#b8893a', olive:'#5d6b35', rust:'#9a3b2b', tan:'#b98d5c', ink:'#24202a', wine:'#7a2324', wine2:'#8f2f2a'}},
+      light:{lamp:'#ffcb86', floor:'#ffbf7a', mul:1.15, spot:'#ffd29a', expDay:0.98, expNight:1.05, envDay:0.55, envNight:0.28, hemiNight:'#ffdfc0'}},
+    manhattan: {name:'Манхэттен',
+      floor:{kind:'wide', tones:['#2c2724','#332c28','#28231f','#37302b','#2f2925'], seam:'rgba(0,0,0,.6)', grain:'#120e0c', rough:0.55, clear:0.2},
+      wall:{kind:'slats', c:['#3b2c23','#46342a','#110b08'], rough:0.6, clear:0.15},
+      main:{kind:'marble', base:'#111113', vein:'#d9d4cb', vein2:'#8d8a86', rough:0.12, clear:1},
+      alt:{kind:'lacquer', c:['#151517','#1d1d20'], rough:0.18, clear:0.95},
+      wains:{kind:'plain', c:['#1c1815','#14110f'], rough:0.4, clear:0.4},
+      trim:['#141416','#1d1d20','#0b0b0c'], metal:['#a88b5e', 0.3], gilt:'#b39668', drape:['#2b2b2f','#5a5a62'], cap:'#2a2826',
+      rug:{kind:'modern', pal:{field:'#3b3936', field2:'#34322f', border:'#262422', line:'#a88b5e'}}, art:'abstract-dark', board:{bg:'#1b1b1e', grain:'#000000', title:'#c8a97e'},
+      light:{lamp:'#ffc487', floor:'#ffb877', mul:1.35, spot:'#ffcf96', expDay:0.95, expNight:1.12, envDay:0.5, envNight:0.24, hemiNight:'#ffd9b0'}},
+    riviera: {name:'Ривьера',
+      floor:{kind:'chevron', tones:['#b57d47','#a9733f','#c18a54','#9f6a3a','#b98149'], seam:'rgba(60,30,10,.45)', grain:'#6b4220', rough:0.4, clear:0.55},
+      wall:{kind:'fluted', c:['#efe6d6','#d9cdb9'], rough:0.3, clear:0.7},
+      main:{kind:'marble', base:'#f2ede4', vein:'#9c9182', vein2:'#c9a35a', rough:0.14, clear:1},
+      alt:{kind:'lacquer', c:['#0f4a3a','#145a47'], rough:0.16, clear:0.95},
+      wains:{kind:'panels', c:['#ebe0cd','#d8cab2'], rough:0.3, clear:0.7},
+      trim:['#e7dccb','#f1e8da','#cbbca3'], metal:['#d6b15c', 0.2], gilt:'#dcb763', drape:['#0d4234','#3d8a6c'], cap:'#f3ece0',
+      rug:{kind:'deco', pal:{field:'#0f4a3a', field2:'#0c3f31', motif:'#efe4cf', border:'#c9a35a', ink:'#0a2e24'}}, art:'landscape', board:{bg:'#0f4a3a', grain:'#06261d', title:'#d6b15c'},
+      light:{lamp:'#ffdcae', floor:'#ffd09a', mul:0.95, spot:'#ffe2b8', expDay:1.04, expNight:1.05, envDay:0.7, envNight:0.34, hemiNight:'#ffe8d0'}},
+    zurich: {name:'Цюрих',
+      floor:{kind:'wide', tones:['#cdb79a','#c7b093','#d5c0a4','#c1a98b','#cbb496'], seam:'rgba(90,70,50,.35)', grain:'#8f765a', rough:0.62, clear:0.08},
+      wall:{kind:'plaster', c:['#d9cebf','#cfc3b2','#e2d8ca'], rough:0.92, clear:0},
+      main:{kind:'slats', c:['#b99b75','#c4a681','#5e4a37'], rough:0.6, clear:0.1},
+      alt:{kind:'fabric', c:['#57524c','#4a4540','#655f58'], rough:1, clear:0},
+      wains:{kind:'plain', c:['#cbbfae','#c0b3a1'], rough:0.85, clear:0},
+      trim:['#b08f68','#c4a47c','#8c6f4f'], metal:['#b9bdc3', 0.34], gilt:'#c2c4c8', drape:['#d4cab8','#ebe3d6'], cap:'#e9e3d9',
+      rug:{kind:'modern', pal:{field:'#dbd2c3', field2:'#d2c8b8', border:'#c6b9a6', line:'#8d9688'}}, art:'abstract-light', board:{bg:'#4a4641', grain:'#2a2724', title:'#e6ddd0'},
+      light:{lamp:'#ffe6c8', floor:'#ffdcb4', mul:0.9, spot:'#fff0d8', expDay:1.02, expNight:1.0, envDay:0.75, envNight:0.36, hemiNight:'#fff0e0'}},
+  };
+  const STYLE0 = (()=>{ try { const q = new URLSearchParams(location.search).get('style'); if (q && STYLES[q]) return q; } catch {} return 'manhattan'; })();
+  let STY = STYLES[STYLE0];
+  const STYLE_TEX = [];   // текстуры, которые перерисовываются при смене стиля
+  const PANELS = [];      // настенные панели: {mat, tex, role, w, h}
+  const pick = (arr, i) => arr[Math.abs(i) % arr.length];
+
+  // --- пол ---
+  function drawFloor(c, w, h){
+    const f = STY.floor, R = rng(5);
+    c.fillStyle = f.tones[0]; c.fillRect(0, 0, w, h);
+    const grainIn = (len, wd)=>{ c.globalAlpha = 0.16; c.strokeStyle = f.grain; c.lineWidth = 1;
+      for (let k=0;k<6;k++){ c.beginPath(); const yy = wd*(0.12 + k*0.15); c.moveTo(0, yy); for (let xx=0; xx<=len; xx+=30) c.lineTo(xx, yy + Math.sin(xx*0.025 + k*1.7)*wd*0.06); c.stroke(); } c.globalAlpha = 1; };
+    const plank = (len, wd, col)=>{ const g = c.createLinearGradient(0, 0, len, 0); g.addColorStop(0, col); g.addColorStop(0.5, pick(f.tones, (R()*99)|0)); g.addColorStop(1, col);
+      c.fillStyle = g; c.fillRect(0, 0, len, wd); grainIn(len, wd); c.strokeStyle = f.seam; c.lineWidth = 2; c.strokeRect(0, 0, len, wd); };
+    if (f.kind === 'planks' || f.kind === 'wide'){
+      const rows = f.kind === 'wide' ? 7 : 12, ph = h/rows;
+      for (let r=0; r<rows; r++){ let x = -((r*97)%260) * (f.kind === 'wide' ? 1.6 : 1);
+        while (x < w){ const len = f.kind === 'wide' ? 620 + ((R()*4)|0)*140 : 220 + ((R()*3)|0)*90; c.save(); c.translate(x, r*ph); plank(len, ph, pick(f.tones, (R()*99)|0)); c.restore(); x += len; } }
+    } else if (f.kind === 'herring'){
+      // «ёлочка»: в повёрнутой на 45° системе — лесенка из горизонтальных и вертикальных досок; период по x = √2·a, по y = √2·b
+      const b = 1024/16/Math.SQRT2 * (w/1024), a = 4*b, S = Math.SQRT1_2;
+      c.save(); c.transform(S, S, -S, S, 0, 0);   // (u, v) → x = (u − v)/√2, y = (u + v)/√2
+      for (let m=-14; m<=14; m++) for (let k=-30; k<=40; k++){
+        const ou = k*b + m*a, ov = k*b - m*a;
+        c.save(); c.translate(ou, ov); plank(a, b, pick(f.tones, (R()*99)|0)); c.restore();
+        c.save(); c.translate(ou + a, ov + b - a); c.rotate(Math.PI/2); c.translate(0, -b); plank(a, b, pick(f.tones, (R()*99)|0)); c.restore();
+      }
+      c.restore();
+    } else if (f.kind === 'chevron'){
+      const cols = 4, cw = w/cols, half = cw/2, step = h/Math.round(h/(half*0.36));
+      for (let col=0; col<cols; col++){ const x0 = col*cw;
+        for (let y = -half; y < h + half; y += step){
+          for (const side of [0, 1]){ const tone = pick(f.tones, (R()*99)|0);
+            c.beginPath();
+            if (!side){ c.moveTo(x0, y + half); c.lineTo(x0 + half, y); c.lineTo(x0 + half, y + step); c.lineTo(x0, y + half + step); }
+            else { c.moveTo(x0 + half, y); c.lineTo(x0 + cw, y + half); c.lineTo(x0 + cw, y + half + step); c.lineTo(x0 + half, y + step); }
+            c.closePath(); c.fillStyle = tone; c.fill(); c.strokeStyle = f.seam; c.lineWidth = 2; c.stroke();
+            c.save(); c.clip(); c.globalAlpha = 0.14; c.strokeStyle = f.grain; c.lineWidth = 1;
+            for (let k=1;k<5;k++){ c.beginPath(); const dy = step*k/5; if (!side){ c.moveTo(x0, y + half + dy); c.lineTo(x0 + half, y + dy); } else { c.moveTo(x0 + half, y + dy); c.lineTo(x0 + cw, y + half + dy); } c.stroke(); }
+            c.restore(); c.globalAlpha = 1; } } }
+    }
+    noise(c, w, h, 9000, '#000000', 0.08);
+  }
+
+  // --- стены (тайл, повторяется вдоль стены) ---
+  function drawWall(c, w, h, spec){
+    const k = spec || STY.wall, col = k.c;
+    if (k.kind === 'walnut'){
+      const g = c.createLinearGradient(0,0,w,0); g.addColorStop(0,col[0]); g.addColorStop(0.5,col[1]); g.addColorStop(1,col[2]||col[0]); c.fillStyle = g; c.fillRect(0,0,w,h);
+      for (let i=0;i<70;i++){ const x0 = (i*37 % w) + Math.sin(i)*6; c.strokeStyle = i%3 ? 'rgba(25,12,6,.22)' : 'rgba(120,72,40,.18)'; c.lineWidth = 1 + (i%4); c.beginPath();
+        for (let y=0; y<=h; y+=16){ const x = x0 + Math.sin(y*0.012 + i)*5 + Math.sin(y*0.05 + i*2)*1.5; y ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke(); }
+      for (let i=0;i<6;i++){ const cx = (i*173)%w, cy = (i*311)%h; c.strokeStyle = 'rgba(30,14,6,.18)'; c.lineWidth = 1.5; for (let r=4;r<26;r+=4){ c.beginPath(); c.ellipse(cx, cy, r*0.6, r*2.2, 0, 0, Math.PI*2); c.stroke(); } }
+      noise(c, w, h, 12000, '#1a0c05', 0.10);
+    } else if (k.kind === 'lacquer'){
+      const g = c.createLinearGradient(0,0,0,h); g.addColorStop(0,col[1]); g.addColorStop(1,col[0]); c.fillStyle = g; c.fillRect(0,0,w,h);
+      noise(c, w, h, 4000, '#000000', 0.04);
+    } else if (k.kind === 'plaster'){
+      c.fillStyle = col[0]; c.fillRect(0,0,w,h); const R = rng(9);
+      for (let i=0;i<160;i++){ const x = R()*w, y = R()*h, r = 30 + R()*120, g = c.createRadialGradient(x, y, 0, x, y, r); const cc = i%2 ? col[1] : (col[2]||col[0]);
+        g.addColorStop(0, cc); g.addColorStop(1, 'rgba(0,0,0,0)'); c.globalAlpha = 0.35; c.fillStyle = g; c.fillRect(x-r, y-r, r*2, r*2); }
+      c.globalAlpha = 1; noise(c, w, h, 30000, '#ffffff', 0.05); noise(c, w, h, 30000, '#000000', 0.05);
+    } else if (k.kind === 'slats'){
+      c.fillStyle = col[2]; c.fillRect(0,0,w,h);
+      const n = 8, sw = w/n, gap = sw*0.18;
+      for (let i=0;i<n;i++){ const x = i*sw + gap/2, g = c.createLinearGradient(x, 0, x + sw - gap, 0); g.addColorStop(0, col[0]); g.addColorStop(0.5, col[1]); g.addColorStop(1, col[0]);
+        c.fillStyle = g; c.fillRect(x, 0, sw - gap, h);
+        c.globalAlpha = 0.18; c.strokeStyle = '#000'; for (let j=0;j<5;j++){ c.beginPath(); const xx = x + (sw - gap)*(0.15 + j*0.17); c.moveTo(xx, 0); for (let y=0;y<=h;y+=24) c.lineTo(xx + Math.sin(y*0.02 + i + j)*1.5, y); c.stroke(); } c.globalAlpha = 1;
+        const sh = c.createLinearGradient(x + sw - gap, 0, x + sw, 0); sh.addColorStop(0, 'rgba(0,0,0,.55)'); sh.addColorStop(1, 'rgba(0,0,0,.1)'); c.fillStyle = sh; c.fillRect(x + sw - gap, 0, gap, h); }
+      noise(c, w, h, 8000, '#000000', 0.06);
+    } else if (k.kind === 'fluted'){
+      const n = 10, fw = w/n;
+      for (let i=0;i<n;i++){ const x = i*fw, g = c.createLinearGradient(x, 0, x + fw, 0);
+        g.addColorStop(0, shade(col[1], -0.12)); g.addColorStop(0.18, col[1]); g.addColorStop(0.45, col[0]); g.addColorStop(0.62, shade(col[0], 0.05)); g.addColorStop(0.9, col[1]); g.addColorStop(1, shade(col[1], -0.18));
+        c.fillStyle = g; c.fillRect(x, 0, fw, h); }
+      noise(c, w, h, 6000, '#000000', 0.04);
+    }
+  }
+  function shade(hex, k){ const n = parseInt(hex.slice(1), 16); let r = n>>16, g = (n>>8)&255, b = n&255; const f = k < 0 ? 0 : 255, t = Math.abs(k);
+    r = Math.round(r + (f - r)*t); g = Math.round(g + (f - g)*t); b = Math.round(b + (f - b)*t); return `rgb(${r},${g},${b})`; }
+
+  // --- настенные панели: рисуются целиком под размер панели ---
+  function drawPanel(c, w, h, spec, ppu){
+    const k = spec, col = k.c || [];
+    if (k.kind === 'plaid'){
+      const tile = document.createElement('canvas'); tile.width = tile.height = 512; const t = tile.getContext('2d');
+      drawPlaid(t, 512, 512, k);
+      const pat = c.createPattern(tile, 'repeat'), sc = 13*ppu/512; c.save(); c.scale(sc, sc); c.fillStyle = pat; c.fillRect(0, 0, w/sc, h/sc); c.restore();
+    } else if (k.kind === 'wood'){
+      const tile = document.createElement('canvas'); tile.width = 512; tile.height = 1024; drawWall(tile.getContext('2d'), 512, 1024, {kind:'walnut', c:k.c});
+      const pat = c.createPattern(tile, 'repeat'), sc = 34*ppu/512; c.save(); c.scale(sc, h/1024); c.fillStyle = pat; c.fillRect(0, 0, w/sc, 1024); c.restore();
+    } else if (k.kind === 'marble'){
+      c.fillStyle = k.base; c.fillRect(0, 0, w, h); const R = rng(Math.round(w*7 + h));
+      // облачные пятна
+      for (let i=0;i<40;i++){ const x = R()*w, y = R()*h, r = (0.1 + R()*0.3)*Math.max(w, h), g = c.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, k.vein2); g.addColorStop(1, 'rgba(0,0,0,0)'); c.globalAlpha = 0.05; c.fillStyle = g; c.fillRect(x-r, y-r, r*2, r*2); }
+      c.globalAlpha = 1;
+      const vein = (wd, alpha, color)=>{ let x = R()*w, y = -h*0.1; const ang = 0.7 + R()*0.9; c.strokeStyle = color; c.globalAlpha = alpha; c.lineWidth = wd; c.lineCap = 'round'; c.beginPath(); c.moveTo(x, y);
+        while (y < h*1.1 && x > -w*0.2 && x < w*1.2){ const st = 12 + R()*30; x += Math.cos(ang + (R() - 0.5)*1.3)*st*(R() < 0.5 ? 1 : 0.6); y += Math.sin(ang)*st; c.lineTo(x, y); } c.stroke(); c.globalAlpha = 1; };
+      for (let i=0;i<5;i++){ c.shadowColor = k.vein; c.shadowBlur = 6; vein(2.2 + R()*2.5, 0.75, k.vein); c.shadowBlur = 0; }
+      for (let i=0;i<14;i++) vein(0.6 + R()*0.9, 0.45, i%3 ? k.vein : k.vein2);
+      for (let i=0;i<4;i++) vein(1.2, 0.7, k.vein2);
+      noise(c, w, h, w*h/30, '#ffffff', 0.03);
+    } else if (k.kind === 'lacquer'){
+      const g = c.createLinearGradient(0, 0, w*0.6, h); g.addColorStop(0, col[1]); g.addColorStop(1, col[0]); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      noise(c, w, h, w*h/60, '#000000', 0.03);
+    } else if (k.kind === 'fabric'){
+      c.fillStyle = col[0]; c.fillRect(0, 0, w, h); const R = rng(3);
+      for (let i=0;i<w*h/14;i++){ const x = R()*w, y = R()*h; c.fillStyle = R() < 0.5 ? col[1] : (col[2]||col[0]); c.globalAlpha = 0.55; c.beginPath(); c.arc(x, y, 0.8 + R()*1.6, 0, Math.PI*2); c.fill(); }
+      c.globalAlpha = 1; noise(c, w, h, w*h/8, '#000000', 0.05);
+    } else if (k.kind === 'slats' || k.kind === 'fluted'){
+      const tile = document.createElement('canvas'); tile.width = 512; tile.height = 512; drawWall(tile.getContext('2d'), 512, 512, {kind:k.kind, c:k.c});
+      const pat = c.createPattern(tile, 'repeat'), sc = (k.kind === 'slats' ? 40 : 30)*ppu/512; c.save(); c.scale(sc, h/512); c.fillStyle = pat; c.fillRect(0, 0, w/sc, 512); c.restore();
+    }
+  }
+  // абстрактная живопись для современных стилей: крупные плоскости, дуга и мазок
+  function drawAbstractArt(c, w, h, light){
+    const bg = light ? '#ece6dc' : '#18181a', a1 = light ? '#b9a58a' : '#a88b5e', a2 = light ? '#5d5a55' : '#d9d4cb', a3 = light ? '#8d9688' : '#3a3633';
+    c.fillStyle = bg; c.fillRect(0, 0, w, h);
+    c.fillStyle = a3; c.fillRect(w*0.08, h*0.52, w*0.5, h*0.36);
+    c.beginPath(); c.arc(w*0.66, h*0.42, h*0.3, 0, Math.PI*2); c.fillStyle = a1; c.fill();
+    c.strokeStyle = a2; c.lineWidth = h*0.05; c.lineCap = 'round'; c.beginPath(); c.moveTo(w*0.12, h*0.28); c.bezierCurveTo(w*0.36, h*0.12, w*0.52, h*0.7, w*0.9, h*0.62); c.stroke();
+    c.fillStyle = a2; c.globalAlpha = 0.85; c.fillRect(w*0.74, h*0.12, w*0.012, h*0.76); c.globalAlpha = 1;
+    noise(c, w, h, 9000, light ? '#000000' : '#ffffff', 0.05);
+  }
+  function drawPlaid(c, w, h, k){
+    c.fillStyle = k.base; c.fillRect(0,0,w,h);
+    const cols = k.bands.split('|');
+    const bands = [[0.02,0.10,0],[0.14,0.02,1],[0.18,0.02,1],[0.34,0.012,2],[0.48,0.16,3],[0.53,0.018,4],[0.59,0.018,4],[0.75,0.02,1],[0.86,0.01,1]];
+    for (const [p0, wd, ci] of bands){ c.fillStyle = cols[ci % cols.length]; c.fillRect(p0*w, 0, wd*w, h); c.fillRect(0, p0*h, w, wd*h); }
+    c.globalAlpha = 0.10; c.strokeStyle = '#000'; c.lineWidth = 1; for (let i=-h; i<w; i+=4){ c.beginPath(); c.moveTo(i, 0); c.lineTo(i+h, h); c.stroke(); } c.globalAlpha = 1;
+    noise(c, w, h, 26000, '#ffffff', 0.05); noise(c, w, h, 26000, '#000000', 0.10);
+  }
+
+  // --- ковры: современный и ар-деко ---
+  function drawModernRunner(c, w, h){
+    const P = STY.rug.pal; c.clearRect(0, 0, w, h);
+    c.fillStyle = P.border; c.fillRect(0, 0, w, h);
+    const b = h*0.11; c.fillStyle = P.field; c.fillRect(b, b, w - b*2, h - b*2);
+    c.strokeStyle = P.line; c.lineWidth = Math.max(2, h*0.008); c.strokeRect(b*0.55, b*0.55, w - b*1.1, h - b*1.1);
+    const R = rng(4); for (let i=0;i<w*h/90;i++){ c.fillStyle = R() < 0.5 ? P.field2 : P.border; c.globalAlpha = 0.25; c.fillRect(R()*w, R()*h, 2, 2); }
+    c.globalAlpha = 1; weave(c, w, h, Math.max(3, Math.round(h/220)), 0.04);
+  }
+  function drawModernRound(c, w, h){
+    const P = STY.rug.pal, R0 = w/2; c.clearRect(0, 0, w, h); c.save(); c.translate(R0, R0);
+    const ring = (r, col)=>{ c.beginPath(); c.arc(0, 0, R0*r, 0, Math.PI*2); c.fillStyle = col; c.fill(); };
+    ring(0.97, P.border); ring(0.86, P.field); c.strokeStyle = P.line; c.lineWidth = Math.max(2, w*0.004); c.beginPath(); c.arc(0, 0, R0*0.915, 0, Math.PI*2); c.stroke();
+    c.restore(); const R = rng(6); for (let i=0;i<w*h/90;i++){ c.fillStyle = R() < 0.5 ? P.field2 : P.border; c.globalAlpha = 0.25; c.fillRect(R()*w, R()*h, 2, 2); } c.globalAlpha = 1;
+    c.save(); c.globalCompositeOperation = 'destination-in'; c.beginPath(); c.arc(R0, R0, R0*0.97, 0, Math.PI*2); c.fill(); c.restore();
+    c.save(); c.beginPath(); c.arc(R0, R0, R0*0.97, 0, Math.PI*2); c.clip(); weave(c, w, h, Math.max(3, Math.round(w/400)), 0.04); c.restore();
+  }
+  function drawDecoRunner(c, w, h){
+    const P = STY.rug.pal; c.clearRect(0, 0, w, h);
+    c.fillStyle = P.border; c.fillRect(0, 0, w, h);
+    const b = h*0.07; c.fillStyle = P.field; c.fillRect(b, b, w - b*2, h - b*2);
+    c.strokeStyle = P.border; c.lineWidth = h*0.012; c.strokeRect(b*1.6, b*1.6, w - b*3.2, h - b*3.2);
+    // веера ар-деко
+    const fy0 = b*2.3, fh = h - fy0*2, r = fh*0.42;
+    for (let x = fy0 + r, i = 0; x < w - fy0 - r*0.5; x += r*1.9, i++){
+      for (const [cy, dir] of [[fy0 + fh*0.5 + r*0.45, -1], [fy0 + fh*0.5 - r*0.45, 1]]){
+        c.save(); c.translate(x + (dir < 0 ? 0 : r*0.95), cy);
+        for (let k=0;k<9;k++){ const a0 = (dir < 0 ? Math.PI : 0) + k/9*Math.PI, a1 = a0 + Math.PI/9*0.82;
+          c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, r, a0, a1); c.closePath(); c.fillStyle = k%2 ? P.motif : P.field2; c.fill(); }
+        c.beginPath(); c.arc(0, 0, r*0.3, dir < 0 ? Math.PI : 0, dir < 0 ? Math.PI*2 : Math.PI); c.fillStyle = P.border; c.fill();
+        c.strokeStyle = P.border; c.lineWidth = r*0.035; c.beginPath(); c.arc(0, 0, r*1.06, dir < 0 ? Math.PI : 0, dir < 0 ? Math.PI*2 : Math.PI); c.stroke();
+        c.restore(); } }
+    weave(c, w, h, Math.max(3, Math.round(h/220)), 0.05);
+  }
+  function drawDecoRound(c, w, h){
+    const P = STY.rug.pal, R0 = w/2; c.clearRect(0, 0, w, h); c.save(); c.translate(R0, R0);
+    const ring = (r, col)=>{ c.beginPath(); c.arc(0, 0, R0*r, 0, Math.PI*2); c.fillStyle = col; c.fill(); };
+    ring(0.97, P.border); ring(0.92, P.field); ring(0.84, P.border); ring(0.82, P.field);
+    for (let k=0;k<32;k++){ const a0 = k/32*Math.PI*2, a1 = a0 + Math.PI*2/32*0.6; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, R0*0.7, a0, a1); c.closePath(); c.fillStyle = k%2 ? P.motif : P.field2; c.fill(); }
+    ring(0.4, P.field); ring(0.36, P.border); ring(0.3, P.field2);
+    for (let k=0;k<8;k++){ c.save(); c.rotate(k*Math.PI/4); c.beginPath(); c.moveTo(0, -R0*0.06); c.lineTo(R0*0.24, 0); c.lineTo(0, R0*0.06); c.closePath(); c.fillStyle = P.motif; c.fill(); c.restore(); }
+    ring(0.07, P.border); c.restore();
+    c.save(); c.globalCompositeOperation = 'destination-in'; c.beginPath(); c.arc(R0, R0, R0*0.97, 0, Math.PI*2); c.fill(); c.restore();
+    c.save(); c.beginPath(); c.arc(R0, R0, R0*0.97, 0, Math.PI*2); c.clip(); weave(c, w, h, Math.max(3, Math.round(w/400)), 0.05); c.restore();
+  }
+
+  // --- смена стиля ---
+  const RUG_BASE = {};
+  function setStyle(name, opts = {}){
+    const s = STYLES[name]; if (!s) return false; STY = s;
+    if (!THREE || !scene) return true;
+    Object.assign(RUG, RUG_BASE, (s.rug && s.rug.pal) || {});
+    if (opts.redraw !== false){ for (const t of STYLE_TEX) redraw(t); for (const p of PANELS) restylePanel(p); if (DYN.board) DYN.board.last = -1; }
+    const W = s.wall, F = s.floor, Wn = s.wains;
+    Object.assign(M.floor, {roughness:F.rough, clearcoat:F.clear});
+    for (const m of [M.wallA, M.wallB]) Object.assign(m, {roughness:W.rough, clearcoat:W.clear});
+    for (const m of [M.wainsA, M.wainsB]) Object.assign(m, {roughness:Wn.rough, clearcoat:Wn.clear});
+    M.mahog.color.set(s.trim[0]); M.mahogL.color.set(s.trim[1]); M.mahogD.color.set(s.trim[2]);
+    M.brass.color.set(s.metal[0]); M.brass.roughness = s.metal[1]; M.gilt.color.set(s.gilt);
+    M.velvet.color.set(s.drape[0]); M.velvet.sheenColor.set(s.drape[1]);
+    M.cream.color.set(s.cap);
+    for (const l of LIGHT.lamps){ if (l.isSpotLight) l.color.set(s.light.spot); else l.color.set(l.userData.kind === 'floor' ? s.light.floor : s.light.lamp); }
+    applyDay();
+    return true;
+  }
+  function restylePanel(p){
+    const spec = STY[p.role]; redraw(p.tex);
+    const ph = spec.kind === 'marble' || spec.kind === 'lacquer';
+    Object.assign(p.mat, {roughness:spec.rough, clearcoat:spec.clear ?? 0, clearcoatRoughness:ph ? 0.08 : 0.3});
+    p.mat.color.set(spec.tint || '#ffffff'); p.mat.needsUpdate = true;
+  }
+
   // ---------- материалы ----------
   function buildMaterials(){
-    const wood = canvasTex(1024, 1024, (c, w, h)=>{
-      const tones = ['#6a432c','#613c27','#72492f','#5b3824','#674029','#6e452c'];
-      const ph = h/12;
-      for (let r=0; r<12; r++){
-        let x = -((r*97)%260);
-        while (x < w){ const len = 220 + (Math.abs(r*53 + x)%3)*90; const g = c.createLinearGradient(x, 0, x+len, 0); const t0 = tones[Math.abs(r*7 + (x|0))%tones.length];
-          g.addColorStop(0, t0); g.addColorStop(0.5, tones[Math.abs(r*3+5+(x|0))%tones.length]); g.addColorStop(1, t0);
-          c.fillStyle = g; c.fillRect(x, r*ph, len-2, ph-2);
-          c.globalAlpha = 0.18; c.strokeStyle = '#2a170d'; c.lineWidth = 1;
-          for (let k=0;k<7;k++){ c.beginPath(); const yy = r*ph + 6 + k*(ph-12)/6; c.moveTo(x, yy); for (let xx=x; xx<x+len; xx+=40) c.lineTo(xx, yy + Math.sin(xx*0.02 + k + r)*2.2); c.stroke(); }
-          c.globalAlpha = 1; x += len; }
-      }
-      c.fillStyle = 'rgba(20,10,5,.55)'; for (let r=0; r<=12; r++) c.fillRect(0, r*ph-2, w, 2);
-      noise(c, w, h, 9000, '#1d0f08', 0.12);
-    }, {repeat:[3.2, 1.6]});
+    const wood = canvasTex(1024, 1024, drawFloor, {repeat:[3.2, 1.6]}); STYLE_TEX.push(wood);
     M.floor = phys('#ffffff', {map:wood, roughness:0.48, clearcoat:0.35, clearcoatRoughness:0.35});
     M.slab = phys('#3b2418', {roughness:0.55});
     M.slabTrim = phys('#6e4630', {roughness:0.45, clearcoat:0.4});
-    // стены: ореховые панели (стойки и рамки), вставки — ткань в клетку
-    const walnut = (rep)=>canvasTex(512, 1024, (c, w, h)=>{
-      const g = c.createLinearGradient(0,0,w,0); g.addColorStop(0,'#4a2a19'); g.addColorStop(0.5,'#563320'); g.addColorStop(1,'#462817'); c.fillStyle = g; c.fillRect(0,0,w,h);
-      for (let k=0;k<70;k++){ const x0 = (k*37 % w) + Math.sin(k)*6; c.strokeStyle = k%3 ? 'rgba(25,12,6,.22)' : 'rgba(120,72,40,.18)'; c.lineWidth = 1 + (k%4); c.beginPath();
-        for (let y=0; y<=h; y+=16){ const x = x0 + Math.sin(y*0.012 + k)*5 + Math.sin(y*0.05 + k*2)*1.5; y ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke(); }
-      for (let k=0;k<6;k++){ const cx = (k*173)%w, cy = (k*311)%h; c.strokeStyle = 'rgba(30,14,6,.18)'; c.lineWidth = 1.5; for (let r=4;r<26;r+=4){ c.beginPath(); c.ellipse(cx, cy, r*0.6, r*2.2, 0, 0, Math.PI*2); c.stroke(); } }
-      noise(c, w, h, 12000, '#1a0c05', 0.10);
-    }, {repeat:rep});
-    M.wallA = phys('#ffffff', {map:walnut([FW/34, 1]), roughness:0.45, clearcoat:0.5, clearcoatRoughness:0.3});
-    M.wallB = phys('#ffffff', {map:walnut([FD/34, 1]), roughness:0.45, clearcoat:0.5, clearcoatRoughness:0.3});
-    M.panelWood = (len)=>phys('#d8c8b8', {map:walnut([len/34, 1]), roughness:0.42, clearcoat:0.55, clearcoatRoughness:0.25});
-    // шотландка: тёмно-синяя с кэмел, как на референсе
-    M.plaidTex = canvasTex(512, 512, (c, w, h)=>{
-      c.fillStyle = '#18203a'; c.fillRect(0,0,w,h);
-      const bands = [[0.02,0.10,'rgba(190,150,100,.55)'],[0.14,0.02,'rgba(205,165,110,.75)'],[0.18,0.02,'rgba(205,165,110,.75)'],[0.34,0.012,'rgba(70,45,30,.6)'],[0.48,0.16,'rgba(180,140,92,.42)'],[0.53,0.018,'rgba(40,30,30,.5)'],[0.59,0.018,'rgba(40,30,30,.5)'],[0.75,0.02,'rgba(205,165,110,.7)'],[0.86,0.01,'rgba(205,165,110,.6)']];
-      for (const [p0, wd, col] of bands){ c.fillStyle = col; c.fillRect(p0*w, 0, wd*w, h); c.fillRect(0, p0*h, w, wd*h); }
-      // саржевое плетение и ворс
-      c.globalAlpha = 0.10; c.strokeStyle = '#000'; c.lineWidth = 1; for (let k=-h; k<w; k+=4){ c.beginPath(); c.moveTo(k, 0); c.lineTo(k+h, h); c.stroke(); } c.globalAlpha = 1;
-      noise(c, w, h, 26000, '#ffffff', 0.05); noise(c, w, h, 26000, '#000000', 0.10);
-    });
-    M.plaidTex.wrapS = M.plaidTex.wrapT = THREE.RepeatWrapping;
-    M.wainsA = phys('#ffffff', {map:wainsTex(430), roughness:0.42, clearcoat:0.45, clearcoatRoughness:0.3});
-    M.wainsB = phys('#ffffff', {map:wainsTex(205), roughness:0.42, clearcoat:0.45, clearcoatRoughness:0.3});
+    // стены, панели и пол рисуются по текущему стилю (см. STYLES)
+    const wtA = canvasTex(512, 1024, (c, w, h)=>drawWall(c, w, h), {repeat:[FW/34, 1]}), wtB = canvasTex(512, 1024, (c, w, h)=>drawWall(c, w, h), {repeat:[FD/34, 1]}); STYLE_TEX.push(wtA, wtB);
+    M.wallA = phys('#ffffff', {map:wtA, roughness:0.45, clearcoat:0.5, clearcoatRoughness:0.3});
+    M.wallB = phys('#ffffff', {map:wtB, roughness:0.45, clearcoat:0.5, clearcoatRoughness:0.3});
+    const waA = wainsTex(430), waB = wainsTex(205); STYLE_TEX.push(waA, waB);
+    M.wainsA = phys('#ffffff', {map:waA, roughness:0.42, clearcoat:0.45, clearcoatRoughness:0.3});
+    M.wainsB = phys('#ffffff', {map:waB, roughness:0.42, clearcoat:0.45, clearcoatRoughness:0.3});
     M.mahog = phys('#5a2e1d', {roughness:0.4, clearcoat:0.65, clearcoatRoughness:0.22});
     M.mahogL = phys('#71402a', {roughness:0.38, clearcoat:0.6, clearcoatRoughness:0.25});
     M.mahogD = phys('#3b1d12', {roughness:0.45, clearcoat:0.5, clearcoatRoughness:0.3});
@@ -1897,8 +2126,11 @@ const O3 = (()=>{
   function wainsTex(len){
     const ppu = 6; // пикселей на единицу
     return canvasTex(Math.round(len*ppu), 34*ppu, (c, w, h)=>{
-      const g = c.createLinearGradient(0,0,0,h); g.addColorStop(0,'#55321f'); g.addColorStop(1,'#3a2214'); c.fillStyle = g; c.fillRect(0,0,w,h);
+      const Wn = STY.wains, g = c.createLinearGradient(0,0,0,h); g.addColorStop(0,Wn.c[0]); g.addColorStop(1,Wn.c[1]); c.fillStyle = g; c.fillRect(0,0,w,h);
+      if (Wn.kind === 'plain'){ c.globalAlpha = 0.25; c.fillStyle = '#000'; for (let x=0; x<w; x+=ppu*6) c.fillRect(x, 0, 2, h); c.globalAlpha = 1; noise(c, w, h, w*h/160, '#000000', 0.06); return; }
+      const dark = /^#[0-6]/.test(Wn.c[0]);
       for (let k=0;k<w/6;k++){ const x0 = k*6 + Math.sin(k)*3; c.strokeStyle = k%3 ? 'rgba(20,10,5,.16)' : 'rgba(130,80,45,.12)'; c.lineWidth = 1 + k%3; c.beginPath(); for (let y=0;y<=h;y+=12){ const x = x0 + Math.sin(y*0.02 + k)*3; y ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke(); }
+      if (!dark) c.globalAlpha = 0.5;
       for (let u=5; u+26<len; u+=32){
         const x = u*ppu, y = 6*ppu, pw = 26*ppu, ph = 21*ppu;
         c.fillStyle = 'rgba(0,0,0,.14)'; c.fillRect(x, y, pw, ph);
@@ -1906,7 +2138,7 @@ const O3 = (()=>{
         c.strokeStyle = 'rgba(0,0,0,.45)'; c.beginPath(); c.moveTo(x+pw, y); c.lineTo(x+pw, y+ph); c.lineTo(x, y+ph); c.stroke();
         c.strokeStyle = 'rgba(255,214,170,.09)'; c.lineWidth = 2; c.strokeRect(x+3*ppu, y+3*ppu, pw-6*ppu, ph-6*ppu);
       }
-      noise(c, w, h, w*h/120, '#170b06', 0.12);
+      c.globalAlpha = 1; noise(c, w, h, w*h/120, '#170b06', dark ? 0.12 : 0.05);
     });
   }
 
@@ -1927,15 +2159,16 @@ const O3 = (()=>{
     boxAt(0, 2.2, WH-6.4, FW, 0.4, 0.5, M.brass, 0, null, false); boxAt(2.2, 0, WH-6.4, 0.4, FD, 0.5, M.brass, 0, null, false);
     boxAt(-WT, -WT, WH, FW+WT, WT, 0.6, M.cream, 0, null, false); boxAt(-WT, 0, WH, WT, FD, 0.6, M.cream, 0, null, false);
     // ковровая дорожка под столами и круглый ковёр под столом для планёрок
-    const runner = canvasTex(3072, 584, drawRunnerRug);
+    const runner = canvasTex(3072, 584, (c, w, h)=> STY.rug.kind === 'modern' ? drawModernRunner(c, w, h) : STY.rug.kind === 'deco' ? drawDecoRunner(c, w, h) : drawRunnerRug(c, w, h)); STYLE_TEX.push(runner);
     const rm = std('#ffffff', {map:runner, roughness:1, alphaTest:0.5}); const r = new THREE.Mesh(new THREE.PlaneGeometry(386, 72), rm); r.rotation.x = -Math.PI/2; r.position.set(43+193, 0.12, 4+36); r.receiveShadow = true; scene.add(r);
-    const round = canvasTex(1536, 1536, drawRoundRug);
+    const round = canvasTex(1536, 1536, (c, w, h)=> STY.rug.kind === 'modern' ? drawModernRound(c, w, h) : STY.rug.kind === 'deco' ? drawDecoRound(c, w, h) : drawRoundRug(c, w, h)); STYLE_TEX.push(round);
     const rr = new THREE.Mesh(new THREE.CircleGeometry(1, 96), std('#ffffff', {map:round, roughness:1, alphaTest:0.5}));
     rr.rotation.x = -Math.PI/2; rr.scale.set(53, 53, 1); rr.position.set(TABLE.x, 0.14, TABLE.y); rr.receiveShadow = true; scene.add(rr);
   }
 
   // ---------- ковры: по референсам (дорожка — светлое поле и синяя кайма, круглый — синее поле и бордовая кайма) ----------
   const RUG = {ivory:'#e9dfc6', cream:'#f3ead6', navy:'#1c2b55', navy2:'#25386b', blue:'#5f86b8', sky:'#a3bcd8', gold:'#b88f33', olive:'#6e7b3b', rust:'#a4533a', tan:'#c7a774', ink:'#272834', wine:'#6e2424', wine2:'#82302b'};
+  setTimeout(()=>{ if (!Object.keys(RUG_BASE).length) Object.assign(RUG_BASE, RUG); });
   function rng(seed){ let t = seed >>> 0; return ()=>{ t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t); r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; }; }
   function rpoly(c, x, y, r, n, rot=0){ c.beginPath(); for (let k=0;k<n;k++){ const a = rot + k/n*Math.PI*2; k ? c.lineTo(x+Math.cos(a)*r, y+Math.sin(a)*r) : c.moveTo(x+Math.cos(a)*r, y+Math.sin(a)*r); } c.closePath(); }
   function star8(c, x, y, r, col){ c.fillStyle = col; rpoly(c, x, y, r, 4, 0); c.fill(); rpoly(c, x, y, r, 4, Math.PI/4); c.fill(); }
@@ -2304,14 +2537,14 @@ const O3 = (()=>{
     boxAt(0.5, LY - 16, 96.5, 3, 32, 1.3, M.brass, 0.4);
     // картина
     boxAt(0, 149, 51, 1.8, 48, 35, M.gilt, 0.5);
-    const pic = canvasTex(400, 270, (c, w, h)=>{
+    const pic = canvasTex(400, 270, (c, w, h)=>{ if (STY.art && STY.art.startsWith('abstract')) return drawAbstractArt(c, w, h, STY.art === 'abstract-light');
       const sk = c.createLinearGradient(0,0,0,h); sk.addColorStop(0,'#33476e'); sk.addColorStop(0.6,'#c99363'); sk.addColorStop(1,'#e6b77a'); c.fillStyle = sk; c.fillRect(0,0,w,h);
       c.fillStyle = '#4b5a3a'; c.beginPath(); c.moveTo(0,200); c.quadraticCurveTo(120,130,240,180); c.quadraticCurveTo(320,205,400,160); c.lineTo(400,270); c.lineTo(0,270); c.fill();
       c.fillStyle = '#2f3e28'; c.beginPath(); c.moveTo(0,240); c.quadraticCurveTo(200,190,400,232); c.lineTo(400,270); c.lineTo(0,270); c.fill();
       c.fillStyle = '#1f2a1c'; c.fillRect(290,110,7,80); c.beginPath(); c.ellipse(294,105,38,32,0,0,Math.PI*2); c.fill();
       c.fillStyle = '#e8d9b0'; c.fillRect(80,160,46,24); c.beginPath(); c.moveTo(74,161); c.lineTo(103,140); c.lineTo(132,161); c.fill();
       noise(c, w, h, 14000, '#000', 0.08);
-    });
+    }); STYLE_TEX.push(pic);
     wallPlane('B', 173, 68.5, 40, 27, std('#ffffff', {map:pic, roughness:0.6}), 1.95);
     boxAt(0.5, 159, 89.6, 3, 28, 1.2, M.brass, 0.4);
     DYN.chart.last = DYN.board.last = DYN.ticker.last = DYN.clock.last = -1;
@@ -2319,8 +2552,9 @@ const O3 = (()=>{
   function wallPanel(wall, u0, u1, z0, z1, kind){
     const w = u1 - u0, h = z1 - z0, inset = 1.6;
     let mat;
-    if (kind === 'plaid'){ const t = M.plaidTex.clone(); t.needsUpdate = true; t.repeat.set((w - inset*2)/13, (h - inset*2)/13); mat = std('#ffffff', {map:t, roughness:0.95}); }
-    else mat = M.panelWood(w);
+    const role = kind === 'plaid' ? 'main' : 'alt', ppu = 8, pw = w - inset*2, phh = h - inset*2;
+    const tex = canvasTex(Math.round(pw*ppu), Math.round(phh*ppu), (c, cw, ch)=>drawPanel(c, cw, ch, STY[role], ppu));
+    mat = phys('#ffffff', {map:tex, roughness:0.9}); PANELS.push({mat, tex, role, w:pw, h:phh}); restylePanel(PANELS[PANELS.length - 1]);
     const p = wallPlane(wall, u0 + w/2, z0 + h/2, w - inset*2, h - inset*2, mat, 0.25); p.receiveShadow = true;
     // рамка-молдинг
     const fr = (a0, b0, a1, b1)=> wall === 'A' ? boxAt(a0, 0, b0, a1 - a0, 1.1, b1 - b0, M.mahogL, 0.25, null, false) : boxAt(0, a0, b0, 1.1, a1 - a0, b1 - b0, M.mahogL, 0.25, null, false);
@@ -2426,14 +2660,15 @@ const O3 = (()=>{
     if (!scene) return;
     for (const cty of CITY){ cty.mat.map = DAY ? (cty.photoDay || cty.day) : (cty.photoNight || cty.night); cty.mat.color.set(DAY ? '#ffffff' : '#d9d9e6'); cty.mat.needsUpdate = true; }
     for (const m of SUN) m.visible = DAY;
-    renderer.toneMappingExposure = DAY ? 1.0 : 1.08;
-    scene.environmentIntensity = DAY ? 0.62 : 0.32;
-    if (LIGHT.hemi){ LIGHT.hemi.color.set(DAY ? '#eef4ff' : '#ffe9cf'); LIGHT.hemi.groundColor.set(DAY ? '#6b5444' : '#2a1a1a'); LIGHT.hemi.intensity = DAY ? 1.05 : 0.55; }
+    const Lt = STY.light;
+    renderer.toneMappingExposure = DAY ? Lt.expDay : Lt.expNight;
+    scene.environmentIntensity = DAY ? Lt.envDay : Lt.envNight;
+    if (LIGHT.hemi){ LIGHT.hemi.color.set(DAY ? '#eef4ff' : Lt.hemiNight); LIGHT.hemi.groundColor.set(DAY ? '#6b5444' : '#2a1a1a'); LIGHT.hemi.intensity = DAY ? 1.05 : 0.55; }
     if (LIGHT.key){ LIGHT.key.color.set(DAY ? '#fffaf0' : '#fff1dc'); LIGHT.key.intensity = DAY ? 2.0 : 1.6; }
     if (LIGHT.fill){ LIGHT.fill.color.set(DAY ? '#cfe0ff' : '#9fb4ff'); LIGHT.fill.intensity = DAY ? 0.45 : 0.25; }
     if (LIGHT.sky) LIGHT.sky.intensity = DAY ? 1.15 : 0;
     if (LIGHT.win){ LIGHT.win.color.set(DAY ? '#cfe4ff' : '#7f8fd0'); LIGHT.win.intensity = DAY ? 4200 : 1800; }
-    for (const l of LIGHT.lamps) l.intensity = l.userData.base * (DAY ? 0.35 : 1);
+    for (const l of LIGHT.lamps) l.intensity = l.userData.base * (DAY ? 0.35 : 1) * Lt.mul;
     if (M.shade) M.shade.emissiveIntensity = DAY ? 0.15 : 0.55;
     if (M.lampGlass) M.lampGlass.emissiveIntensity = DAY ? 0.15 : 0.6;
     if (M.bulb) M.bulb.emissiveIntensity = DAY ? 0.6 : 2.2;
@@ -2453,7 +2688,7 @@ const O3 = (()=>{
     const sky = LIGHT.sky = new THREE.DirectionalLight('#dbe9ff', 0); sky.position.set(FW*0.5 - 60, 260, -260); sky.target.position.set(FW*0.5, 0, FD*0.6); scene.add(sky); scene.add(sky.target);
     for (const [x, y, z, kind] of LAMPS){
       const p = new THREE.PointLight(kind==='floor' ? '#ffc98a' : '#ffd79a', kind==='floor' ? 5200 : 2600, kind==='floor' ? 180 : 110, 2);
-      p.position.set(x, z, y); p.userData.base = p.intensity; LIGHT.lamps.push(p); scene.add(p);
+      p.position.set(x, z, y); p.userData.base = p.intensity; p.userData.kind = kind; LIGHT.lamps.push(p); scene.add(p);
     }
     for (const [ty, tz, w] of [[102, 67, 0.45], [173, 68, 0.5]]){
       const sp = new THREE.SpotLight('#ffdcaa', 9000, 120, w, 0.7, 2); sp.position.set(14, tz+34, ty); sp.target.position.set(0, tz, ty); sp.userData.base = sp.intensity; LIGHT.lamps.push(sp); scene.add(sp); scene.add(sp.target);
@@ -2494,8 +2729,9 @@ const O3 = (()=>{
     c.textAlign = 'right'; c.fillStyle = '#ffffff'; c.fillText(fmtP(st0.price), w-28, 18); c.textAlign = 'left';
   }
   function drawBoardTex(c, w, h){
-    c.fillStyle = '#21402f'; c.fillRect(0,0,w,h); noise(c, w, h, 6000, '#0b1a10', 0.3);
-    c.font = `700 34px ${FONT}`; c.fillStyle = '#d9b867'; c.textAlign = 'center'; c.fillText('СИГНАЛЫ', w/2, 52);
+    const Bd = STY.board || {bg:'#21402f', grain:'#0b1a10', title:'#d9b867'};
+    c.fillStyle = Bd.bg; c.fillRect(0,0,w,h); noise(c, w, h, 6000, Bd.grain, 0.3);
+    c.font = `700 34px ${FONT}`; c.fillStyle = Bd.title; c.textAlign = 'center'; c.fillText('СИГНАЛЫ', w/2, 52);
     (S.sigLog || []).slice(0,4).forEach((sg,i)=>{
       const cx = 105 + (i%2)*190, cy = 165 + Math.floor(i/2)*170;
       c.save(); c.translate(cx, cy); c.rotate(((i*37)%7-3)*0.02);
@@ -2970,7 +3206,7 @@ const O3 = (()=>{
     } catch(e){ console.warn('[3D] портреты:', e); }
   }
 
-  return {init, render, overlay, attach, setDay, view(az=0, el=0, zoom=1, tx){ st.az = az; st.el = el; st.zoom = zoom; if (tx) Object.assign(T, tx); }, get ok(){ return ok; }, get debug(){ return {modelsSettled, avatarsDone, figs:Object.values(FIG).map(f=>f.kind||'proc')}; }, get failed(){ return failed; }, project};
+  return {init, render, overlay, attach, setDay, setStyle, styles:()=>Object.fromEntries(Object.entries(STYLES).map(([k, v])=>[k, v.name])), get style(){ return Object.keys(STYLES).find(k=>STYLES[k]===STY); }, view(az=0, el=0, zoom=1, tx){ st.az = az; st.el = el; st.zoom = zoom; if (tx) Object.assign(T, tx); }, get ok(){ return ok; }, get debug(){ return {modelsSettled, avatarsDone, figs:Object.values(FIG).map(f=>f.kind||'proc')}; }, get failed(){ return failed; }, project};
 })();
 
 // ---------- тема: светлая (в офисе день) / тёмная (ночь) / авто (как в системе) ----------
