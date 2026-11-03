@@ -1,9 +1,10 @@
-// Офис: состояние, конвейер Рустам → Джама → Нод → Артур, сделки, сохранение, Claude
+// Офис: состояние, конвейер Рустам → Джама → Нод → Артур, сделки по нескольким счетам, сохранение, Claude
 import fs from 'node:fs';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
 import * as B from './brain.js';
 import {ask, askJSON, aiEnabled} from './claude.js';
+import {describeError} from './exchange.js';
 const {sideRu, fmtUSD, fmtPct, fmtPrice, fmtQty, clamp} = B;
 
 const AGENTS = {
@@ -12,34 +13,64 @@ const AGENTS = {
   timur: {name: 'Нод', role: 'стратег сигналов',            persona: 'уверенный, говорит процентами уверенности и порогами'},
   aliya: {name: 'Артур',  role: 'трейдер-исполнитель',         persona: 'собранный и лаконичный, отчитывается ордерами и результатом в долларах'},
 };
+const freshStats = () => ({nika: {news: 0, briefs: 0, reliable: 0}, boris: {evals: 0, ok: 0, caution: 0, reject: 0}, timur: {signals: 0, confSum: 0, closes: 0, below: 0}, aliya: {orders: 0, skips: 0, errors: 0}});
 
-function freshState(CFG){
-  return {
-    v: 2, ids: 1, createdAt: Date.now(), mode: CFG.mode, exchange: CFG.exchange, exchangeEnv: CFG.exchangeEnv,
-    profile: 'balanced', params: {...B.PROFILES.balanced}, auto: true, tradingOn: true,
-    pf: {cash: CFG.paperCash, startEquity: CFG.paperCash, positions: [], closed: [], fees: 0, dayKey: '', dayStart: CFG.paperCash, killed: false, curve: [], peak: CFG.paperCash, maxDD: 0, initialised: CFG.mode === 'paper'},
-    news: [], seenNews: [], brief: null, evals: [], evalLog: [], signals: [], sigLog: [], pending: [], orders: [], feed: [],
-    stats: {nika: {news: 0, briefs: 0, reliable: 0}, boris: {evals: 0, ok: 0, caution: 0, reject: 0}, timur: {signals: 0, confSum: 0, closes: 0, below: 0}, aliya: {orders: 0, skips: 0, errors: 0}},
-  };
+// «книга» счёта: деньги, позиции, история и переключатели — у каждого счёта своя
+function newBook(acc, CFG){
+  const paper = acc.kind === 'paper', cash = paper ? CFG.paperCash : 0;
+  return {sig: acc.sig, cash, startEquity: cash, positions: [], closed: [], fees: 0, dayKey: '', dayStart: cash, killed: false, curve: [], peak: cash, maxDD: 0,
+    initialised: paper, auto: !acc.real, tradingOn: true, everActive: false};
+}
+// state.pf / state.auto / state.tradingOn смотрят в книгу активного счёта (в файл не пишутся)
+function attachViews(state){
+  const book = () => state.books[state.active];
+  Object.defineProperty(state, 'pf', {get: book, enumerable: false, configurable: true});
+  Object.defineProperty(state, 'auto', {get: () => book().auto, set: v => { book().auto = v; }, enumerable: false, configurable: true});
+  Object.defineProperty(state, 'tradingOn', {get: () => book().tradingOn, set: v => { book().tradingOn = v; }, enumerable: false, configurable: true});
+  return state;
 }
 
 export class Office extends EventEmitter {
-  constructor({CFG, market, broker}){
+  constructor({CFG, market, accounts}){
     super();
-    this.CFG = CFG; this.market = market; this.broker = broker;
+    this.CFG = CFG; this.market = market; this.accounts = accounts;
     this.file = path.join(CFG.dataDir, 'state.json');
     this.state = this.load();
     this.running = false; this.again = null; this.lastFocusAt = 0; this.saveT = null;
-    this.ctx = {coins: market.coins, state: this.state, id: () => this.state.ids++, equity: () => this.equity(), marketType: CFG.marketType, maxOrderUsd: CFG.maxOrderUsd};
+    const self = this;
+    this.ctx = {coins: market.coins, state: this.state, id: () => this.state.ids++, equity: () => this.equity(), marketType: CFG.marketType, get maxOrderUsd(){ return self.acc.maxOrderUsd; }};
   }
+  get acc(){ return this.accounts[this.state.active]; }
+  get broker(){ return this.acc.broker; }
+
   // ---------- хранение ----------
   load(){
-    try {
-      const s = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-      if (s.v === 2 && s.mode === this.CFG.mode && s.exchange === this.CFG.exchange && s.exchangeEnv === this.CFG.exchangeEnv) { console.log('[office] состояние загружено'); return s; }
-      console.log('[office] режим изменился — начинаю с чистого листа');
-    } catch {}
-    return freshState(this.CFG);
+    let s = null;
+    try { s = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch {}
+    if (s && s.v === 2){
+      // переход со старого формата: один счёт → книга этого счёта
+      const id = s.mode === 'paper' ? 'paper' : s.exchange;
+      const book = {...s.pf, auto: s.auto, tradingOn: s.tradingOn, sig: id === 'paper' ? 'paper' : `${s.exchange}:${s.exchangeEnv}:${this.CFG.marketType}`, everActive: true};
+      for (const k of ['pf', 'auto', 'tradingOn', 'mode', 'exchange', 'exchangeEnv']) delete s[k];
+      Object.assign(s, {v: 3, books: {[id]: book}, active: id});
+      console.log('[office] состояние перенесено в новый формат');
+    }
+    if (!s || s.v !== 3){
+      const firstEx = Object.values(this.accounts).find(a => a.kind === 'exchange' && a.configured) || null;
+      s = {v: 3, ids: 1, createdAt: Date.now(), active: this.CFG.mode === 'exchange' && firstEx ? firstEx.id : 'paper', books: {},
+        profile: 'balanced', params: {...B.PROFILES.balanced},
+        news: [], seenNews: [], brief: null, evals: [], evalLog: [], signals: [], sigLog: [], pending: [], orders: [], feed: [], stats: freshStats()};
+    } else console.log('[office] состояние загружено');
+    for (const acc of Object.values(this.accounts)){
+      const b = s.books[acc.id];
+      if (!b) s.books[acc.id] = newBook(acc, this.CFG);
+      else if (b.sig !== acc.sig){
+        s.books[acc.id] = newBook(acc, this.CFG);
+        (s.feed ||= []).unshift({id: s.ids++, ts: Date.now(), from: 'system', to: null, text: `Настройки счёта «${acc.label}» изменились — учёт по нему начат заново.`, tag: 'system'});
+      }
+    }
+    if (!this.accounts[s.active] || !this.accounts[s.active].configured) s.active = 'paper';
+    return attachViews(s);
   }
   save(){
     try { fs.mkdirSync(this.CFG.dataDir, {recursive: true}); const tmp = this.file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(this.state)); fs.renameSync(tmp, this.file); }
@@ -50,26 +81,44 @@ export class Office extends EventEmitter {
   // ---------- деньги ----------
   price(sym){ const c = this.market.coins[sym]; return c ? c.price : 0; }
   upnl(p){ return (this.price(p.sym) - p.entry) * p.qty * p.dir; }
-  equity(){ let e = this.state.pf.cash; for (const p of this.state.pf.positions) e += p.entry * p.qty + this.upnl(p); return e; }
+  equity(book = this.state.pf){ let e = book.cash; for (const p of book.positions) e += p.entry * p.qty + this.upnl(p); return e; }
   dayKey(ts = Date.now()){ return new Intl.DateTimeFormat('en-CA', {timeZone: this.CFG.tz, year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(ts)); }
+  // счета, по которым сейчас можно вести позиции
+  liveBooks(){ return Object.entries(this.state.books).filter(([id]) => this.accounts[id] && this.accounts[id].ready).map(([id, book]) => ({id, book, acc: this.accounts[id]})); }
 
   async initAccount(){
-    const pf = this.state.pf;
-    if (this.CFG.mode !== 'exchange') { if (!pf.dayKey){ pf.dayKey = this.dayKey(); pf.dayStart = this.equity(); } return; }
-    const bal = await this.broker.balance();
-    if (!pf.initialised && bal){
-      pf.cash = bal.total || bal.free || 0; pf.startEquity = pf.cash; pf.dayStart = pf.cash; pf.peak = pf.cash; pf.initialised = true;
-      this.post('system', null, `Подключен счёт ${this.venue()}: ${fmtUSD(pf.cash)} USDT. Агенты начинают работу.`, 'system');
-    }
-    if (!pf.dayKey){ pf.dayKey = this.dayKey(); pf.dayStart = this.equity(); }
-    await this.reconcile(true);
+    const pf = this.state.books.paper; if (!pf.dayKey){ pf.dayKey = this.dayKey(); pf.dayStart = this.equity(pf); }
     this.touch();
   }
+  // подключение биржевого счёта: ключи, баланс, сверка позиций
+  async connectAccount(id){
+    const acc = this.accounts[id];
+    if (!acc || acc.kind !== 'exchange' || !acc.configured || !acc.broker) return false;
+    try { await acc.broker.init(Object.values(this.market.coins).map(c => c.symbol)); }
+    catch (e) {
+      const err = describeError(e), first = acc.error !== err;
+      acc.ready = false; acc.error = err; acc.failedAt = Date.now();
+      if (first) console.warn(`[account] ${acc.label}:`, err);
+      this.emit('accounts'); return false;
+    }
+    const wasReady = acc.ready; acc.ready = true; acc.error = '';
+    const book = this.state.books[id], bal = acc.broker.lastBalance;
+    if (!book.initialised && bal){
+      book.cash = bal.total || bal.free || 0; book.startEquity = book.cash; book.dayStart = book.cash; book.peak = book.cash; book.initialised = true;
+      this.post('system', null, `Подключен счёт «${acc.label}»: ${fmtUSD(book.cash)} USDT.`, 'system');
+    } else if (!wasReady && acc.failedAt) this.post('system', null, `Связь со счётом «${acc.label}» восстановлена.`, 'system');
+    if (!book.dayKey){ book.dayKey = this.dayKey(); book.dayStart = this.equity(book); }
+    for (const n of acc.broker.notes || []) if (!wasReady) this.post('system', null, `«${acc.label}»: ${n}`, 'system');
+    await this.reconcile(id, true);
+    this.emit('accounts'); this.touch();
+    return true;
+  }
   // сверка с биржей: позиции, закрытые вне офиса, и позиции, открытые без нас (только фьючерсы)
-  async reconcile(adopt = false){
-    if (this.CFG.mode !== 'exchange' || this.CFG.marketType !== 'swap') return;
-    const pf = this.state.pf;
-    const live = await this.broker.openPositions(Object.values(this.market.coins).map(c => c.symbol));
+  async reconcile(id = this.state.active, adopt = false){
+    const acc = this.accounts[id];
+    if (!acc || acc.kind !== 'exchange' || !acc.ready || this.CFG.marketType !== 'swap') return;
+    const pf = this.state.books[id], tag = id === this.state.active ? '' : `«${acc.label}»: `;
+    const live = await acc.broker.openPositions(Object.values(this.market.coins).map(c => c.symbol));
     if (live === null) return;
     for (const pos of [...pf.positions]){
       if (pos.closing || Date.now() - pos.ts < 60000) continue;
@@ -77,25 +126,49 @@ export class Office extends EventEmitter {
       const px = this.price(pos.sym) || pos.entry;
       const gross = (px - pos.entry) * pos.qty * pos.dir;
       pf.cash += pos.entry * pos.qty + gross; pf.positions = pf.positions.filter(x => x !== pos);
+      await acc.broker.unprotectPos(pos);
       const c = {id: pos.id, sym: pos.sym, dir: pos.dir, qty: pos.qty, entry: pos.entry, exit: px, ts: pos.ts, tsClose: Date.now(), pnl: gross - pos.fees, pct: (gross - pos.fees) / (pos.entry * pos.qty), reason: 'закрыта вне офиса', conf: pos.conf};
       pf.closed.unshift(c);
-      this.post('aliya', null, `Позиции ${sideRu(pos.dir)} ${pos.sym} больше нет на бирже — похоже, её закрыли вручную или биржа ликвидировала. Убрала из учёта (оценка ${fmtUSD(c.pnl, true)}).`, 'system');
+      this.post('aliya', null, `${tag}Позиции ${sideRu(pos.dir)} ${pos.sym} больше нет на бирже — её закрыли вручную, сработал страховочный стоп или биржа ликвидировала. Убрал из учёта (оценка ${fmtUSD(c.pnl, true)}).`, 'system');
     }
     if (!adopt) { this.touch(); return; }
     for (const lp of live){
       const c = Object.values(this.market.coins).find(x => x.symbol === lp.symbol); if (!c) continue;
       if (pf.positions.some(p => p.symbol === lp.symbol)) continue;
       const atr = B.indicators(c).atr; const stop = 1.6 * atr;
-      pf.positions.push({id: this.ctx.id(), sym: c.sym, symbol: c.symbol, dir: lp.dir, qty: lp.qty, entry: lp.entry, sl: lp.entry - lp.dir * stop, tp: lp.entry + lp.dir * stop * this.state.params.rr, stop, ts: Date.now(), riskUSD: lp.qty * stop, conf: 0, fees: 0, be: false, adopted: true});
+      const pos = {id: this.ctx.id(), sym: c.sym, symbol: c.symbol, dir: lp.dir, qty: lp.qty, entry: lp.entry, sl: lp.entry - lp.dir * stop, tp: lp.entry + lp.dir * stop * this.state.params.rr, stop, ts: Date.now(), riskUSD: lp.qty * stop, conf: 0, fees: 0, be: false, adopted: true};
+      pf.positions.push(pos);
       pf.cash -= lp.entry * lp.qty;
-      this.post('aliya', null, `Нашёл на бирже открытую позицию ${sideRu(lp.dir)} ${c.sym} ${fmtQty(lp.qty, lp.entry)} @ ${fmtPrice(lp.entry)} — взяла под контроль со стопом и тейком.`, 'trade');
+      this.post('aliya', null, `${tag}Нашёл на бирже открытую позицию ${sideRu(lp.dir)} ${c.sym} ${fmtQty(lp.qty, lp.entry)} @ ${fmtPrice(lp.entry)} — взял под контроль со стопом и тейком.`, 'trade');
     }
     this.touch();
   }
-  venue(){
-    if (this.CFG.mode === 'paper') return `виртуальный, цены ${this.CFG.exchange === 'mock' ? 'имитации' : this.CFG.exchange}`;
-    const ex = this.CFG.exchange === 'mock' ? 'имитация биржи' : this.CFG.exchange[0].toUpperCase() + this.CFG.exchange.slice(1);
-    return `${ex} ${this.CFG.exchangeEnv === 'demo' ? 'демо-счёт' : 'тестовая сеть'} · ${this.CFG.marketType === 'swap' ? 'фьючерсы' : 'спот'}`;
+  venue(id = this.state.active){
+    const acc = this.accounts[id]; if (!acc) return '';
+    return acc.kind === 'paper' ? `виртуальный счёт, котировки ${this.CFG.quotes === 'mock' ? 'имитации' : this.CFG.quotes[0].toUpperCase() + this.CFG.quotes.slice(1)}` : `${acc.label}, ${this.CFG.marketType === 'swap' ? 'фьючерсы' : 'спот'}`;
+  }
+  accountsPublic(){
+    return Object.values(this.accounts).map(a => ({id: a.id, kind: a.kind, label: a.label, note: a.note, real: a.real, ready: a.ready, configured: a.configured, error: a.error || '',
+      positions: (this.state.books[a.id] || {positions: []}).positions.length}));
+  }
+  // переключение счёта из интерфейса
+  async switchAccount(id, confirmed){
+    const acc = this.accounts[id];
+    if (!acc) throw new Error('Нет такого счёта');
+    if (id === this.state.active) return false;
+    if (!acc.configured) throw new Error(acc.error || 'Счёт не настроен на сервере');
+    if (acc.real && !confirmed) throw new Error('Для реального счёта нужно подтверждение');
+    if (!acc.ready && !(await this.connectAccount(id))) throw new Error(`Счёт «${acc.label}» недоступен: ${acc.error}`);
+    const prev = this.acc, prevOpen = this.state.pf.positions.length;
+    this.state.pending = []; this.emit('pending');
+    this.state.active = id;
+    const book = this.state.pf;
+    if (!book.everActive){ book.everActive = true; if (acc.real) book.auto = false; }
+    this.post('system', null, `Счёт переключён: «${acc.label}».` +
+      (acc.real ? ` Сделки идут на настоящие деньги. ${book.auto ? 'Автосделки включены.' : 'Каждую сделку Артур будет ждать вашего подтверждения.'}` : '') +
+      (prevOpen ? ` На счёте «${prev.label}» осталось позиций: ${prevOpen} — стопы и тейки по ним продолжают работать.` : ''), 'system');
+    this.save(); this.emit('reset');
+    return true;
   }
 
   // ---------- лента ----------
@@ -188,6 +261,7 @@ export class Office extends EventEmitter {
   async openPosition(sig){
     const st = this.state, p = st.params, pf = st.pf;
     const res = (kind, text) => ({kind, text, sig});
+    if (!this.acc.ready) return res('skip', `Пропускаю ${sideRu(sig.dir)} ${sig.sym}: нет связи со счётом «${this.acc.label}».`);
     if (!st.tradingOn) return res('skip', `Пропускаю ${sideRu(sig.dir)} ${sig.sym}: торговля на паузе.`);
     if (pf.killed) return res('skip', `Пропускаю ${sideRu(sig.dir)} ${sig.sym}: сработал дневной лимит убытка.`);
     const ex = pf.positions.find(x => x.sym === sig.sym);
@@ -197,7 +271,7 @@ export class Office extends EventEmitter {
     if (pf.positions.length >= p.maxPos) return res('skip', pre + `Пропускаю ${sideRu(sig.dir)} ${sig.sym}: лимит ${p.maxPos} поз.`);
     if (sig.dir < 0 && (!p.shorts || this.CFG.marketType === 'spot')) return res('skip', pre + `Пропускаю SHORT ${sig.sym}: шорты выключены.`);
     const coin = this.market.coins[sig.sym]; const px = coin.price;
-    let qty = Math.min(sig.qty, this.CFG.maxOrderUsd / px);
+    let qty = Math.min(sig.qty, this.acc.maxOrderUsd / px);
     if (qty * px * 1.002 > pf.cash * 0.98) qty = pf.cash * 0.98 / (px * 1.002);
     if (qty * px < 10) return res('skip', pre + `Пропускаю ${sig.sym}: мало свободных средств.`);
     let f;
@@ -208,67 +282,78 @@ export class Office extends EventEmitter {
     const pos = {id: this.ctx.id(), sym: sig.sym, symbol: coin.symbol, dir: sig.dir, qty: f.qty, entry: f.fill, sl: f.fill - sig.dir * stop, tp: f.fill + sig.dir * stop * p.rr, stop, ts: Date.now(), riskUSD: f.qty * stop, conf: sig.conf, fees: f.fee, be: false, orderId: f.orderId};
     pf.positions.push(pos);
     st.stats.aliya.orders++;
+    if (this.broker.protect){
+      try { const pr = await this.broker.protectPos(pos); if (pr){ pos.protId = pr.id; pos.protPx = pr.price; } }
+      catch (e) { this.post('aliya', null, `Не удалось поставить страховочный стоп на бирже для ${pos.sym}: ${describeError(e)}. Позицию веду сам.`, 'system'); }
+    }
     st.orders = [{ts: Date.now(), text: `${sideRu(pos.dir)} ${pos.sym} ${fmtQty(pos.qty, pos.entry)} @ ${fmtPrice(pos.entry)}`}, ...st.orders].slice(0, 30);
     this.emit('open', pos);
     return {kind: 'open', pos, text: pre + `Открыл ${sideRu(pos.dir)} ${pos.sym}: ${fmtQty(pos.qty, pos.entry)} @ ${fmtPrice(pos.entry)}. Стоп ${fmtPrice(pos.sl)}, тейк ${fmtPrice(pos.tp)}.`};
   }
-  async closePosition(pos, reason){
+  async closePosition(pos, reason, id = this.state.active){
     if (pos.closing) return null; pos.closing = true;
-    const pf = this.state.pf; const px = this.price(pos.sym);
+    const acc = this.accounts[id], pf = this.state.books[id]; const px = this.price(pos.sym);
     let f;
-    try { f = await this.broker.close(pos, px); }
+    try { f = await acc.broker.close(pos, px); }
     catch (e) {
       pos.closing = false; pos.closeErr = (pos.closeErr || 0) + 1; this.state.stats.aliya.errors++;
-      if (pos.closeErr === 3) this.reconcile().catch(() => {});
-      if (pos.closeErr === 1 || pos.closeErr % 10 === 0) this.post('aliya', null, `Не получилось закрыть ${sideRu(pos.dir)} ${pos.sym} (${reason}): ${e.message}. Повторю.`, 'system');
+      if (pos.closeErr === 3) this.reconcile(id).catch(() => {});
+      if (pos.closeErr === 1 || pos.closeErr % 10 === 0) this.post('aliya', null, `${id === this.state.active ? '' : `«${acc.label}»: `}Не получилось закрыть ${sideRu(pos.dir)} ${pos.sym} (${reason}): ${e.message}. Повторю.`, 'system');
       return null;
     }
+    await acc.broker.unprotectPos(pos);
     const gross = (f.fill - pos.entry) * pos.qty * pos.dir;
     pf.cash += pos.entry * pos.qty + gross - f.fee; pf.fees += f.fee;
     pf.positions = pf.positions.filter(x => x !== pos);
     const net = gross - f.fee - pos.fees;
     const c = {id: pos.id, sym: pos.sym, dir: pos.dir, qty: pos.qty, entry: pos.entry, exit: f.fill, ts: pos.ts, tsClose: Date.now(), pnl: net, pct: net / (pos.entry * pos.qty), reason, conf: pos.conf, note: f.note};
     pf.closed.unshift(c); if (pf.closed.length > 300) pf.closed.length = 300;
-    this.state.orders = [{ts: Date.now(), text: `Закрыт ${sideRu(pos.dir)} ${pos.sym} @ ${fmtPrice(f.fill)} · ${fmtUSD(net, true)}`}, ...this.state.orders].slice(0, 30);
+    if (id === this.state.active) this.state.orders = [{ts: Date.now(), text: `Закрыт ${sideRu(pos.dir)} ${pos.sym} @ ${fmtPrice(f.fill)} · ${fmtUSD(net, true)}`}, ...this.state.orders].slice(0, 30);
     this.emit('close', c); this.touch();
     return c;
   }
 
   // ---------- каждую котировку: стопы и тейки ----------
   async onTick(){
-    for (const pos of [...this.state.pf.positions]){
-      if (pos.closing) continue;
-      const px = this.price(pos.sym); if (!px) continue;
-      const hitSL = pos.dir > 0 ? px <= pos.sl : px >= pos.sl;
-      const hitTP = pos.dir > 0 ? px >= pos.tp : px <= pos.tp;
-      if (!hitSL && !hitTP) continue;
-      const reason = hitTP ? 'тейк-профит' : pos.be ? 'стоп в безубытке' : 'стоп-лосс';
-      const c = await this.closePosition(pos, reason);
-      if (c){
-        this.post('aliya', null, `Сработал ${reason}: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)} (${fmtPct(c.pct)}).`, 'trade', {sym: c.sym});
-        this.emit('react', {agent: 'aliya', say: `${hitTP ? 'Тейк' : 'Стоп'} ${c.sym}: ${fmtUSD(c.pnl, true)}`, pnl: c.pnl});
+    for (const {id, book, acc} of this.liveBooks()){
+      const tag = id === this.state.active ? '' : `«${acc.label}»: `;
+      for (const pos of [...book.positions]){
+        if (pos.closing) continue;
+        const px = this.price(pos.sym); if (!px) continue;
+        const hitSL = pos.dir > 0 ? px <= pos.sl : px >= pos.sl;
+        const hitTP = pos.dir > 0 ? px >= pos.tp : px <= pos.tp;
+        if (!hitSL && !hitTP) continue;
+        const reason = hitTP ? 'тейк-профит' : pos.be ? 'стоп в безубытке' : 'стоп-лосс';
+        const c = await this.closePosition(pos, reason, id);
+        if (c){
+          this.post('aliya', null, `${tag}Сработал ${reason}: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)} (${fmtPct(c.pct)}).`, 'trade', {sym: c.sym});
+          if (!tag) this.emit('react', {agent: 'aliya', say: `${hitTP ? 'Тейк' : 'Стоп'} ${c.sym}: ${fmtUSD(c.pnl, true)}`, pnl: c.pnl});
+        }
       }
+      if (book.positions.length){ const eq = this.equity(book); book.peak = Math.max(book.peak, eq); book.maxDD = Math.max(book.maxDD, 1 - eq / book.peak); }
     }
-    const pf = this.state.pf, eq = this.equity();
-    if (pf.positions.length){ pf.peak = Math.max(pf.peak, eq); pf.maxDD = Math.max(pf.maxDD, 1 - eq / pf.peak); }
   }
   // ---------- на закрытии свечи ----------
   async onCandle(){
-    const st = this.state, pf = st.pf, p = st.params, tf = this.market.tf;
-    for (const pos of [...pf.positions]){
-      if (pos.closing) continue;
-      const px = this.price(pos.sym); const gain = (px - pos.entry) * pos.dir;
-      if (!pos.be && gain >= pos.stop){ pos.sl = pos.entry + pos.dir * pos.stop * 0.15; pos.be = true; this.post('aliya', null, `Перенёс стоп ${pos.sym} в безубыток.`, 'trade', {sym: pos.sym}); }
-      if (gain >= pos.stop * 1.6){ const atr = B.indicators(this.market.coins[pos.sym]).atr; const ns = px - pos.dir * 1.1 * atr; if ((ns - pos.sl) * pos.dir > 0) pos.sl = ns; }
-      if (Date.now() - pos.ts >= p.timeStop * tf){ const c = await this.closePosition(pos, 'по времени'); if (c){ this.post('aliya', null, `Закрыл по времени: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)}.`, 'trade'); this.emit('react', {agent: 'aliya', say: `Выход по времени ${c.sym}`, pnl: c.pnl}); } }
+    const st = this.state, p = st.params, tf = this.market.tf;
+    for (const {id, book: pf, acc} of this.liveBooks()){
+      const tag = id === st.active ? '' : `«${acc.label}»: `;
+      for (const pos of [...pf.positions]){
+        if (pos.closing) continue;
+        const px = this.price(pos.sym); const gain = (px - pos.entry) * pos.dir;
+        if (!pos.be && gain >= pos.stop){ pos.sl = pos.entry + pos.dir * pos.stop * 0.15; pos.be = true; this.post('aliya', null, `${tag}Перенёс стоп ${pos.sym} в безубыток.`, 'trade', {sym: pos.sym}); }
+        if (gain >= pos.stop * 1.6){ const atr = B.indicators(this.market.coins[pos.sym]).atr; const ns = px - pos.dir * 1.1 * atr; if ((ns - pos.sl) * pos.dir > 0) pos.sl = ns; }
+        if (Date.now() - pos.ts >= p.timeStop * tf){ const c = await this.closePosition(pos, 'по времени', id); if (c){ this.post('aliya', null, `${tag}Закрыл по времени: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)}.`, 'trade'); if (!tag) this.emit('react', {agent: 'aliya', say: `Выход по времени ${c.sym}`, pnl: c.pnl}); } }
+      }
+      if (!pf.initialised) continue;
+      const eq = this.equity(pf), dk = this.dayKey();
+      if (dk !== pf.dayKey){ pf.dayKey = dk; pf.dayStart = eq; if (pf.killed){ pf.killed = false; this.post('aliya', null, `${tag}Новый торговый день: лимит убытка сброшен.`, 'system'); } }
+      if (!pf.killed && eq < pf.dayStart * (1 - p.dailyLimit / 100)){ pf.killed = true; this.post('aliya', null, `${tag}Дневной лимит убытка ${p.dailyLimit}% достигнут — новые сделки на паузе до следующего дня.`, 'system'); if (!tag) this.emit('react', {agent: 'aliya', say: 'Стоп-кран: лимит дня', pnl: -1}); }
+      pf.peak = Math.max(pf.peak, eq); pf.maxDD = Math.max(pf.maxDD, 1 - eq / pf.peak);
+      pf.curve.push({ts: Date.now(), e: eq}); if (pf.curve.length > 1000) pf.curve.splice(0, pf.curve.length - 1000);
     }
     const before = st.pending.length; st.pending = st.pending.filter(x => x.expiresAt > Date.now());
     if (before !== st.pending.length) this.emit('pending');
-    const eq = this.equity(), dk = this.dayKey();
-    if (dk !== pf.dayKey){ pf.dayKey = dk; pf.dayStart = eq; if (pf.killed){ pf.killed = false; this.post('aliya', null, 'Новый торговый день: лимит убытка сброшен.', 'system'); } }
-    if (!pf.killed && eq < pf.dayStart * (1 - p.dailyLimit / 100)){ pf.killed = true; this.post('aliya', null, `Дневной лимит убытка ${p.dailyLimit}% достигнут — новые сделки на паузе до следующего дня.`, 'system'); this.emit('react', {agent: 'aliya', say: 'Стоп-кран: лимит дня', pnl: -1}); }
-    pf.peak = Math.max(pf.peak, eq); pf.maxDD = Math.max(pf.maxDD, 1 - eq / pf.peak);
-    pf.curve.push({ts: Date.now(), e: eq}); if (pf.curve.length > 1000) pf.curve.splice(0, pf.curve.length - 1000);
     this.touch();
   }
 
@@ -296,10 +381,11 @@ export class Office extends EventEmitter {
     if (c){ this.post('aliya', null, `Закрыл вручную по вашей команде: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)} (${fmtPct(c.pct)}).`, 'trade'); this.emit('react', {agent: 'aliya', say: `Закрыл ${c.sym} по команде`, pnl: c.pnl}); }
   }
   resetPaper(){
-    if (this.CFG.mode !== 'paper') return false;
-    const keepNews = this.state.news, seen = this.state.seenNews;
-    this.state = freshState(this.CFG); this.state.news = keepNews; this.state.seenNews = seen; this.ctx.state = this.state;
-    this.state.pf.dayKey = this.dayKey(); this.state.pf.dayStart = this.equity();
+    if (this.state.active !== 'paper') return false;
+    const st = this.state;
+    st.books.paper = newBook(this.accounts.paper, this.CFG); st.books.paper.everActive = true;
+    Object.assign(st, {brief: null, evals: [], evalLog: [], signals: [], sigLog: [], pending: [], orders: [], feed: [], stats: freshStats()});
+    st.pf.dayKey = this.dayKey(); st.pf.dayStart = this.equity();
     this.post('system', null, `Виртуальный счёт сброшен: ${fmtUSD(this.CFG.paperCash)}.`, 'system');
     this.save(); this.emit('reset');
     return true;
@@ -309,7 +395,7 @@ export class Office extends EventEmitter {
   snapshot(){
     const st = this.state, pf = st.pf, eq = this.equity(), cl = pf.closed; const r2 = x => Math.round(x * 100) / 100;
     return {
-      time: new Date().toLocaleString('ru-RU', {timeZone: this.CFG.tz}), venue: this.venue(), risk_profile: st.profile, params: st.params, auto_trading: st.auto, trading_on: st.tradingOn,
+      time: new Date().toLocaleString('ru-RU', {timeZone: this.CFG.tz}), venue: this.venue(), real_money: !!this.acc.real, risk_profile: st.profile, params: st.params, auto_trading: st.auto, trading_on: st.tradingOn,
       account: {equity: r2(eq), pnl_total: r2(eq - pf.startEquity), pnl_today: r2(eq - pf.dayStart), trades: cl.length, win_rate: cl.length ? Math.round(cl.filter(c => c.pnl > 0).length / cl.length * 100) : null, max_drawdown_pct: r2(pf.maxDD * 100), daily_stop_active: pf.killed},
       market: Object.values(this.market.coins).map(c => { const it = B.indicators(c); const b = st.brief && st.brief.items.find(i => i.sym === c.sym); return {coin: c.sym, price: +c.price.toPrecision(6), chg_24h_pct: r2(c.chg24 * 100), rsi: Math.round(it.rsi), atr_pct: r2(it.atrPct * 100), trend: b ? b.label : null, news_tone: b ? r2(b.sent) : null, nika_score: b ? r2(b.score) : null}; }),
       news: st.news.slice(0, 6).map(n => ({coins: n.coins.length ? n.coins : 'весь рынок', title: n.titleRu || n.title, source: n.source, reliability: n.rel, tone: r2(n.s), minutes_ago: Math.round((Date.now() - n.ts) / 60000)})),
@@ -355,8 +441,9 @@ ${JSON.stringify(this.snapshot())}`;
     const st = this.state, pf = st.pf;
     return {
       profile: st.profile, params: st.params, auto: st.auto, tradingOn: st.tradingOn,
+      account: {id: st.active, kind: this.acc.kind, label: this.acc.label, real: !!this.acc.real, ready: !!this.acc.ready, error: this.acc.error || ''}, accounts: this.accountsPublic(),
       pf: {cash: pf.cash, startEquity: pf.startEquity, positions: pf.positions.map(({closing, ...p}) => p), closed: pf.closed.slice(0, 60), fees: pf.fees, dayStart: pf.dayStart, killed: pf.killed, curve: pf.curve.slice(-400), peak: pf.peak, maxDD: pf.maxDD,
-        balance: this.broker.lastBalance || null, closedCount: pf.closed.length, wins: pf.closed.filter(c => c.pnl > 0).length, grossWin: pf.closed.filter(c => c.pnl > 0).reduce((a, c) => a + c.pnl, 0), grossLoss: -pf.closed.filter(c => c.pnl <= 0).reduce((a, c) => a + c.pnl, 0), realized: pf.closed.reduce((a, c) => a + c.pnl, 0)},
+        balance: this.broker.lastBalance || null, maxOrderUsd: this.acc.maxOrderUsd, closedCount: pf.closed.length, wins: pf.closed.filter(c => c.pnl > 0).length, grossWin: pf.closed.filter(c => c.pnl > 0).reduce((a, c) => a + c.pnl, 0), grossLoss: -pf.closed.filter(c => c.pnl <= 0).reduce((a, c) => a + c.pnl, 0), realized: pf.closed.reduce((a, c) => a + c.pnl, 0)},
       news: st.news.slice(0, 30), brief: st.brief, evals: st.evals, evalLog: st.evalLog, sigLog: st.sigLog, pending: st.pending, orders: st.orders, stats: st.stats,
       status: {market: this.market.status, ai: aiEnabled()},
     };

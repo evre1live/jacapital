@@ -11,18 +11,18 @@ services:
     envVars:
       - key: ACCESS_PASSWORD
         sync: false
-      - key: TRADING_MODE
-        value: paper
-      - key: EXCHANGE
-        value: bybit
-      - key: EXCHANGE_ENV
-        value: demo
+      - key: QUOTES
+        value: binance
       - key: MARKET_TYPE
         value: swap
-      - key: EXCHANGE_API_KEY
+      - key: BINANCE_ENV
+        value: live           # live — настоящий счёт, demo — демо-торговля Binance
+      - key: BINANCE_API_KEY
         sync: false
-      - key: EXCHANGE_API_SECRET
+      - key: BINANCE_API_SECRET
         sync: false
+      - key: BINANCE_MAX_ORDER_USD
+        value: "200"
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: DATA_DIR

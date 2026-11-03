@@ -34,16 +34,27 @@ function parseFeeds(s) {
 }
 
 const password = env.ACCESS_PASSWORD || '';
+const legacyEx = (env.EXCHANGE || '').toLowerCase();
 export const CFG = {
   port: +env.PORT || 3000,
   password,
   secret: env.SESSION_SECRET || crypto.createHash('sha256').update('jacapital:' + password).digest('hex'),
-  mode: (env.TRADING_MODE || 'paper').toLowerCase(),           // paper | exchange
-  exchange: (env.EXCHANGE || 'bybit').toLowerCase(),            // bybit | binance | mock
+  // откуда брать котировки для всех счетов: binance | bybit | mock
+  quotes: (env.QUOTES || (env.BINANCE_API_KEY ? 'binance' : legacyEx) || 'binance').toLowerCase(),
+  // какой счёт открыть при первом запуске; дальше счёт выбирается в интерфейсе и запоминается
+  mode: (env.TRADING_MODE || 'paper').toLowerCase(),           // paper | exchange (старый способ задать счёт)
+  exchange: legacyEx || 'bybit',                                // для старой настройки EXCHANGE + EXCHANGE_API_KEY
   exchangeEnv: (env.EXCHANGE_ENV || 'demo').toLowerCase(),      // demo | testnet
   marketType: (env.MARKET_TYPE || 'swap').toLowerCase(),        // swap | spot
   apiKey: env.EXCHANGE_API_KEY || '',
   apiSecret: env.EXCHANGE_API_SECRET || '',
+  // счёт Binance: live — настоящие деньги, demo — демо-торговля Binance, mock — имитация для проверки
+  binance: {
+    key: env.BINANCE_API_KEY || (legacyEx === 'binance' ? env.EXCHANGE_API_KEY || '' : ''),
+    secret: env.BINANCE_API_SECRET || (legacyEx === 'binance' ? env.EXCHANGE_API_SECRET || '' : ''),
+    env: (env.BINANCE_ENV || (legacyEx === 'binance' ? env.EXCHANGE_ENV || 'demo' : 'demo')).toLowerCase(),
+    maxOrderUsd: +env.BINANCE_MAX_ORDER_USD || 0,
+  },
   leverage: Math.max(1, Math.min(5, +env.LEVERAGE || 1)),
   coins: (env.COINS || 'BTC,ETH,SOL,BNB,XRP,DOGE').split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
   timeframe: env.TIMEFRAME || '5m',
@@ -59,17 +70,18 @@ export const CFG = {
   paperCash: +env.PAPER_START_CASH || 10000,
   maxOrderUsd: +env.MAX_ORDER_USD || 3000,
 };
+if (!CFG.binance.maxOrderUsd) CFG.binance.maxOrderUsd = CFG.binance.env === 'live' ? 200 : CFG.maxOrderUsd;
 
 export function validateConfig() {
   const errs = [];
   if (!['paper', 'exchange'].includes(CFG.mode)) errs.push('TRADING_MODE должен быть paper или exchange');
-  if (!['bybit', 'binance', 'mock'].includes(CFG.exchange)) errs.push('EXCHANGE должен быть bybit, binance или mock');
+  if (!['bybit', 'binance', 'mock'].includes(CFG.quotes)) errs.push('QUOTES должен быть binance, bybit или mock');
   if (!['swap', 'spot'].includes(CFG.marketType)) errs.push('MARKET_TYPE должен быть swap или spot');
-  if (CFG.mode === 'exchange') {
-    if (!['demo', 'testnet'].includes(CFG.exchangeEnv)) errs.push('EXCHANGE_ENV должен быть demo или testnet — торговля реальными деньгами в этой версии выключена');
-    if (CFG.exchange === 'binance' && CFG.exchangeEnv === 'testnet' && CFG.marketType === 'swap') errs.push('У Binance больше нет тестовой сети фьючерсов: используйте EXCHANGE_ENV=demo');
-    if (CFG.exchange !== 'mock' && (!CFG.apiKey || !CFG.apiSecret)) errs.push('Нужны EXCHANGE_API_KEY и EXCHANGE_API_SECRET от демо-счёта или тестовой сети');
-    if (!CFG.password) errs.push('Задайте ACCESS_PASSWORD: без пароля любой, кто знает адрес, сможет управлять сделками');
-  }
+  if (!['live', 'demo', 'mock'].includes(CFG.binance.env)) errs.push('BINANCE_ENV должен быть live (настоящий счёт), demo или mock');
+  if (CFG.binance.env === 'mock' && CFG.quotes !== 'mock') errs.push('BINANCE_ENV=mock работает только вместе с QUOTES=mock');
+  if (CFG.apiKey && CFG.exchange === 'bybit' && !['demo', 'testnet'].includes(CFG.exchangeEnv)) errs.push('Для Bybit поддерживаются только EXCHANGE_ENV=demo и testnet');
+  const anyExchange = (CFG.binance.key && CFG.binance.secret) || CFG.binance.env === 'mock' || (CFG.apiKey && CFG.apiSecret) || (CFG.mode === 'exchange' && CFG.exchange === 'mock');
+  if (anyExchange && !CFG.password) errs.push('Задайте ACCESS_PASSWORD: без пароля любой, кто знает адрес, сможет управлять сделками на бирже');
+  if (CFG.binance.env === 'live' && CFG.binance.key && CFG.password.length < 10) errs.push('Для настоящего счёта Binance пароль ACCESS_PASSWORD должен быть не короче 10 символов');
   return errs;
 }

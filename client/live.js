@@ -113,6 +113,7 @@ function onServer(m){
     case 'run': emit('run', m.run); break;
     case 'react': emit('react', m); break;
     case 'toast': toast(m.text); break;
+    case 'accounts': CFGC.accounts = m.accounts; S.accounts = m.accounts; emit('accounts'); break;
     case 'chat': { const cb = REQ[m.reqId]; if (cb){ delete REQ[m.reqId]; cb(m); } break; }
     case 'meetStart': emit('meetStart'); break;
     case 'meeting': emit('meeting', m); break;

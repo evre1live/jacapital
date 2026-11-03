@@ -368,6 +368,18 @@ a.btn{text-decoration:none}
 .venue{font-size:12.5px;color:var(--muted);margin-bottom:8px}
 .msg p a,.duties a{color:var(--accent)}
 
+/* выбор счёта */
+.acct select{max-width:230px}
+.chip-demo.real{background:color-mix(in srgb,var(--down) 18%,transparent);color:var(--down)}
+.chip-demo.exch{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+html[data-real] .topbar{box-shadow:0 0 0 2px color-mix(in srgb,var(--down) 70%,transparent),var(--glass-shadow)}
+html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,var(--fill));color:var(--down);font-weight:600}
+.amlist{margin:0 0 12px;padding-left:18px;color:var(--muted);font-size:13px}
+.amlist li{margin:4px 0}
+.amcheck{display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer}
+.amcheck input{accent-color:var(--down);width:16px;height:16px}
+.acctnote{font-size:12px;color:var(--muted);margin:-4px 0 10px}
+
 </style>
 </head>
 <body>
@@ -384,6 +396,9 @@ a.btn{text-decoration:none}
     <div><dt>Время</dt><dd id="kTime">—</dd></div>
   </dl>
   <div class="controls">
+    <label class="field acct" for="selAccount">Счёт
+      <select id="selAccount"><option>Загрузка…</option></select>
+    </label>
     <span class="conn warn" id="conn" role="status">Подключение…</span>
     <div class="seg theme" role="group" aria-label="Тема оформления">
       <button type="button" data-theme-set="light" aria-pressed="false" title="Светлая тема — в офисе день"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg><span class="sr">Светлая</span></button>
@@ -414,7 +429,7 @@ a.btn{text-decoration:none}
       <div class="approval" id="approval" hidden></div>
     </div>
     <div class="office-foot">
-      <span class="chip-demo">LIVE</span>
+      <span class="chip-demo" id="acctChip">ВИРТУАЛЬНЫЙ</span>
       <span>Реальные котировки и новости. Агенты работают на сервере, даже когда страница закрыта. Нажмите на персонажа, чтобы открыть карточку; перетащите сцену, чтобы повернуть.</span>
       <span class="pipe" aria-label="Цепочка работы"><i style="--c:var(--c-nika)">Рустам</i>→<i style="--c:var(--c-boris)">Джама</i>→<i style="--c:var(--c-timur)">Нод</i>→<i style="--c:var(--c-aliya)">Артур</i></span>
     </div>
@@ -457,6 +472,20 @@ a.btn{text-decoration:none}
   </section>
 </main>
 
+<div class="modal" id="acctModal" hidden>
+  <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="amTitle">
+    <h3 id="amTitle">Перейти на реальный счёт?</h3>
+    <p id="amText">Агенты будут открывать и закрывать сделки на настоящие деньги.</p>
+    <ul class="amlist">
+      <li>Сначала включён ручной режим: Артур ждёт вашего подтверждения по каждой сделке. Автосделки можно включить в шапке.</li>
+      <li>Один ордер — не больше <b id="amMax">—</b>; дневной лимит убытка и стопы работают как обычно.</li>
+      <li>Стопы и тейки ведёт сервер; на бирже дополнительно стоит страховочный стоп на случай, если сервер выключится.</li>
+      <li>Прибыль не гарантирована, убытки возможны.</li>
+    </ul>
+    <label class="amcheck"><input type="checkbox" id="amAgree"> Понимаю, что торговля идёт на мои деньги</label>
+    <div class="mact"><button type="button" class="btn" id="amCancel">Отмена</button><button type="button" class="btn btn-no" id="amOk" disabled>Перейти на реальный счёт</button></div>
+  </div>
+</div>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/addons/"}}</script>
 <script>
 // ================= LIVE: состояние с сервера вместо симуляции =================
@@ -574,6 +603,7 @@ function onServer(m){
     case 'run': emit('run', m.run); break;
     case 'react': emit('react', m); break;
     case 'toast': toast(m.text); break;
+    case 'accounts': CFGC.accounts = m.accounts; S.accounts = m.accounts; emit('accounts'); break;
     case 'chat': { const cb = REQ[m.reqId]; if (cb){ delete REQ[m.reqId]; cb(m); } break; }
     case 'meetStart': emit('meetStart'); break;
     case 'meeting': emit('meeting', m); break;
@@ -2695,6 +2725,7 @@ function bootLive(){
   on('state', ()=>{ if (!uiReady) return; syncControls(); renderApproval(); if (activeTab==='port') renderPortfolio(false); });
   on('feed', m=>{ if (uiReady) addFeedItem(m, true); });
   on('status', renderStatus); on('conn', renderStatus);
+  on('accounts', renderAccounts); on('hello', renderAccounts); on('state', ()=>{ if (S.account && S.account.id !== shownAccount) renderAccounts(); });
   on('meetStart', ()=>{ if (!MEET.active){ gatherMeeting(); for (const a of AG_LIST) say(a, '…', 60); } updateMeetBtn(); });
   on('meeting', async m=>{
     if (m.error){ for (const a of AG_LIST) a.bubble = null; toast(m.error, 4500); endMeeting(); updateMeetBtn(); return; }
@@ -2724,6 +2755,7 @@ function initStaticUI(){
   $$('#filters button').forEach(b=>b.addEventListener('click', ()=>{ feedFilter = b.dataset.f; $$('#filters button').forEach(x=>x.setAttribute('aria-pressed', x===b)); renderFeed(); }));
   $('#tFeed').onclick = ()=>setTab('feed'); $('#tPort').onclick = ()=>setTab('port'); $('#tAgent').onclick = ()=>setTab('agent');
   $$('.tabs [role=tab]').forEach((b,i,all)=>b.addEventListener('keydown', e=>{ if (e.key==='ArrowRight'||e.key==='ArrowLeft'){ const j=(i+(e.key==='ArrowRight'?1:-1)+all.length)%all.length; all[j].click(); all[j].focus(); } }));
+  $('#selAccount').onchange = onAccountChange;
   $('#chkTrade').onchange = e=>wsSend({t:'trading', v:e.target.checked});
   $('#chkAuto').onchange = e=>wsSend({t:'auto', v:e.target.checked});
   $('#selProfile').onchange = e=>{ if (e.target.value!=='custom') wsSend({t:'profile', v:e.target.value}); };
@@ -2748,6 +2780,44 @@ function tfRu(tf){ const m = String(tf).match(/^(\d+)([mhd])$/); if (!m) return 
 function syncControls(){
   $('#chkTrade').checked = !!S.tradingOn; $('#chkAuto').checked = !!S.auto;
   const sel = $('#selProfile'); sel.querySelector('[value=custom]').hidden = S.profile!=='custom'; sel.value = S.profile;
+}
+// ---------- выбор счёта ----------
+let shownAccount = null;
+function renderAccounts(){
+  const sel = $('#selAccount'); if (!sel) return;
+  const list = (S.accounts && S.accounts.length ? S.accounts : CFGC.accounts) || [];
+  const active = (S.account && S.account.id) || CFGC.account || 'paper';
+  const acc = list.find(a=>a.id===active) || {};
+  shownAccount = active;
+  sel.innerHTML = list.map(a=>{
+    const why = !a.configured ? ' — не настроен' : (!a.ready && a.kind==='exchange') ? ' — нет связи' : '';
+    return `<option value="${a.id}"${a.id===active?' selected':''}${!a.configured?' disabled':''} title="${esc((a.error||a.note||'').slice(0,200))}">${esc(a.label + why)}${a.positions && a.id!==active ? ` · позиций: ${a.positions}` : ''}</option>`;
+  }).join('');
+  sel.value = active;
+  const real = !!acc.real;
+  if (real) document.documentElement.setAttribute('data-real', ''); else document.documentElement.removeAttribute('data-real');
+  const chip = $('#acctChip'); if (chip){ chip.textContent = real ? 'РЕАЛЬНЫЕ ДЕНЬГИ' : acc.kind==='exchange' ? 'ДЕМО-СЧЁТ' : 'ВИРТУАЛЬНЫЙ'; chip.className = 'chip-demo' + (real ? ' real' : acc.kind==='exchange' ? ' exch' : ''); }
+}
+function onAccountChange(e){
+  const id = e.target.value, list = (S.accounts && S.accounts.length ? S.accounts : CFGC.accounts) || [];
+  const a = list.find(x=>x.id===id); const back = ()=>{ e.target.value = (S.account && S.account.id) || CFGC.account; };
+  if (!a){ back(); return; }
+  if (!a.configured){ toast(a.error || 'Счёт не настроен на сервере', 4500); back(); return; }
+  if (a.real){ back(); openAcctModal(a); return; }
+  wsSend({t:'account', id}); toast(`Переключаю на «${a.label}»…`);
+}
+function openAcctModal(a){
+  const m = $('#acctModal'); $('#amTitle').textContent = `Перейти на «${a.label}»?`;
+  $('#amText').textContent = 'Агенты будут открывать и закрывать сделки на настоящие деньги этого счёта.' + (a.error && !a.ready ? ` Сейчас нет связи: ${a.error}` : '');
+  $('#amMax').textContent = (a.note.match(/ордер до (\$[\d\s,.]+)/) || [,'лимита MAX ордера'])[1];
+  $('#amAgree').checked = false; $('#amOk').disabled = true; m.hidden = false; $('#amCancel').focus();
+  $('#amAgree').onchange = ev=>{ $('#amOk').disabled = !ev.target.checked; };
+  const close = ()=>{ m.hidden = true; document.removeEventListener('keydown', onKey); $('#selAccount').focus(); };
+  const onKey = ev=>{ if (ev.key==='Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  $('#amCancel').onclick = close;
+  m.onclick = ev=>{ if (ev.target===m) close(); };
+  $('#amOk').onclick = ()=>{ wsSend({t:'account', id:a.id, confirm:true}); toast(`Подключаю «${a.label}»…`, 3500); close(); };
 }
 function renderStatus(){
   const el = $('#conn'); if (!el) return;

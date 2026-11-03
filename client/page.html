@@ -32,6 +32,9 @@
     <div><dt>Время</dt><dd id="kTime">—</dd></div>
   </dl>
   <div class="controls">
+    <label class="field acct" for="selAccount">Счёт
+      <select id="selAccount"><option>Загрузка…</option></select>
+    </label>
     <span class="conn warn" id="conn" role="status">Подключение…</span>
     <div class="seg theme" role="group" aria-label="Тема оформления">
       <button type="button" data-theme-set="light" aria-pressed="false" title="Светлая тема — в офисе день"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg><span class="sr">Светлая</span></button>
@@ -62,7 +65,7 @@
       <div class="approval" id="approval" hidden></div>
     </div>
     <div class="office-foot">
-      <span class="chip-demo">LIVE</span>
+      <span class="chip-demo" id="acctChip">ВИРТУАЛЬНЫЙ</span>
       <span>Реальные котировки и новости. Агенты работают на сервере, даже когда страница закрыта. Нажмите на персонажа, чтобы открыть карточку; перетащите сцену, чтобы повернуть.</span>
       <span class="pipe" aria-label="Цепочка работы"><i style="--c:var(--c-nika)">Рустам</i>→<i style="--c:var(--c-boris)">Джама</i>→<i style="--c:var(--c-timur)">Нод</i>→<i style="--c:var(--c-aliya)">Артур</i></span>
     </div>
@@ -105,6 +108,20 @@
   </section>
 </main>
 
+<div class="modal" id="acctModal" hidden>
+  <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="amTitle">
+    <h3 id="amTitle">Перейти на реальный счёт?</h3>
+    <p id="amText">Агенты будут открывать и закрывать сделки на настоящие деньги.</p>
+    <ul class="amlist">
+      <li>Сначала включён ручной режим: Артур ждёт вашего подтверждения по каждой сделке. Автосделки можно включить в шапке.</li>
+      <li>Один ордер — не больше <b id="amMax">—</b>; дневной лимит убытка и стопы работают как обычно.</li>
+      <li>Стопы и тейки ведёт сервер; на бирже дополнительно стоит страховочный стоп на случай, если сервер выключится.</li>
+      <li>Прибыль не гарантирована, убытки возможны.</li>
+    </ul>
+    <label class="amcheck"><input type="checkbox" id="amAgree"> Понимаю, что торговля идёт на мои деньги</label>
+    <div class="mact"><button type="button" class="btn" id="amCancel">Отмена</button><button type="button" class="btn btn-no" id="amOk" disabled>Перейти на реальный счёт</button></div>
+  </div>
+</div>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/addons/"}}</script>
 <script>
 /*APP*/

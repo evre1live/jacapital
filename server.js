@@ -5,10 +5,9 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {WebSocketServer} from 'ws';
 import {CFG, validateConfig} from './src/config.js';
-import {makeExchanges, describeError} from './src/exchange.js';
+import {makeData, makeAccounts, describeError} from './src/exchange.js';
 import {Market} from './src/market.js';
 import {News} from './src/news.js';
-import {PaperBroker, ExchangeBroker} from './src/broker.js';
 import {Office} from './src/office.js';
 import {PROFILES, coinName, priceDp, qtyDp} from './src/brain.js';
 import {aiEnabled} from './src/claude.js';
@@ -17,11 +16,11 @@ import {isAuthed, checkPassword, sessionCookie, clearCookie, loginPage} from './
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const errs = validateConfig();
 if (errs.length){ console.error('Офис не запущен:\n - ' + errs.join('\n - ')); process.exit(1); }
-if (!CFG.password) console.warn('[!] ACCESS_PASSWORD не задан — интерфейс открыт всем, кто знает адрес (допустимо только в режиме paper на своём компьютере).');
+if (!CFG.password) console.warn('[!] ACCESS_PASSWORD не задан — интерфейс открыт всем, кто знает адрес (допустимо только для виртуального счёта на своём компьютере).');
 
-const {data, trade} = makeExchanges(CFG);
+const data = makeData(CFG);
 const market = new Market(data, CFG);
-const broker = CFG.mode === 'exchange' ? new ExchangeBroker(trade, CFG) : new PaperBroker();
+const accounts = makeAccounts(CFG, data);
 let office = null, news = null;
 
 // ---------- HTTP ----------
@@ -59,7 +58,8 @@ server.on('upgrade', (req, socket, head) => {
 function sendTo(ws, msg){ if (ws.readyState === 1 && ws.bufferedAmount < 2e6) ws.send(JSON.stringify(msg)); }
 function broadcast(msg){ const s = JSON.stringify(msg); for (const ws of wss.clients) if (ws.readyState === 1 && ws.bufferedAmount < 2e6) ws.send(s); }
 function cfgPublic(){
-  return {mode: CFG.mode, exchange: CFG.exchange, exchangeEnv: CFG.exchangeEnv, marketType: CFG.marketType, venue: office ? office.venue() : '', tf: CFG.timeframe, tfMs: market.tf, tz: CFG.tz, ai: aiEnabled(), profiles: PROFILES,
+  const acc = office ? office.acc : accounts.paper;
+  return {mode: acc.kind === 'paper' ? 'paper' : 'exchange', account: acc.id, real: !!acc.real, accounts: office ? office.accountsPublic() : [], quotes: CFG.quotes, marketType: CFG.marketType, venue: office ? office.venue() : '', tf: CFG.timeframe, tfMs: market.tf, tz: CFG.tz, ai: aiEnabled(), profiles: PROFILES,
     coins: Object.values(market.coins).map(c => ({sym: c.sym, name: coinName(c.sym), dp: priceDp(c.price || c.cur?.c || 1), qp: qtyDp(c.price || 1)}))};
 }
 function coinsPayload(full){
@@ -81,6 +81,11 @@ wss.on('connection', ws => {
         case 'approve': await office.approve(+m.id, !!m.ok); break;
         case 'close': await office.manualClose(+m.id); break;
         case 'reset': if (!office.resetPaper()) sendTo(ws, {t: 'toast', text: 'Сброс доступен только для виртуального счёта'}); break;
+        case 'account': {
+          try { await office.switchAccount(String(m.id), m.confirm === true); }
+          catch (e) { sendTo(ws, {t: 'toast', text: e.message}); sendTo(ws, {t: 'accounts', accounts: office.accountsPublic(), active: office.state.active}); }
+          break;
+        }
         case 'chat': {
           try { const text = await office.chat(String(m.agent), m.turns); sendTo(ws, {t: 'chat', reqId: m.reqId, agent: m.agent, text}); }
           catch (e) { sendTo(ws, {t: 'chat', reqId: m.reqId, agent: m.agent, error: e.code === 'no_key' ? 'На сервере не задан ANTHROPIC_API_KEY — разговор с агентами выключен.' : e.message}); }
@@ -107,16 +112,18 @@ async function start(){
     try { await market.init(); break; }
     catch (e) { market.status = {ok: false, error: describeError(e), fails: attempt}; console.error('[market] запуск:', market.status.error); broadcast({t: 'loading', status: market.status}); await new Promise(r => setTimeout(r, Math.min(60000, 5000 * attempt))); }
   }
-  if (CFG.mode === 'exchange'){
-    for (let attempt = 1; ; attempt++){
-      try { await broker.init(Object.values(market.coins).map(c => c.symbol)); break; }
-      catch (e) { console.error('[broker] запуск:', describeError(e)); broadcast({t: 'loading', status: {ok: false, error: describeError(e)}}); await new Promise(r => setTimeout(r, Math.min(60000, 5000 * attempt))); }
-    }
-  }
-  office = new Office({CFG, market, broker});
+  office = new Office({CFG, market, accounts});
   news = new News(CFG, office.state, () => office.ctx.id());
   await office.initAccount();
-  console.log(`Режим: ${office.venue()}. Монеты: ${Object.keys(market.coins).join(', ')}. Таймфрейм ${CFG.timeframe}. Claude: ${aiEnabled() ? 'подключен' : 'нет ключа'}.`);
+  // биржевые счета: активный подключаем сразу, остальные — в фоне
+  const exIds = Object.values(accounts).filter(a => a.kind === 'exchange' && a.configured).map(a => a.id);
+  if (office.acc.kind === 'exchange' && !(await office.connectAccount(office.state.active))){
+    const failed = office.acc;
+    office.state.active = 'paper';
+    office.post('system', null, `Счёт «${failed.label}» сейчас недоступен: ${failed.error} Офис работает на виртуальном счёте; переключиться обратно можно в шапке, когда связь появится.`, 'system');
+  }
+  for (const id of exIds) if (!accounts[id].ready) office.connectAccount(id);
+  console.log(`Счёт: ${office.venue()}. Доступно: ${Object.values(accounts).filter(a => a.configured).map(a => a.label).join(', ')}. Монеты: ${Object.keys(market.coins).join(', ')}. Таймфрейм ${CFG.timeframe}. Claude: ${aiEnabled() ? 'подключен' : 'нет ключа'}.`);
   if (!office.state.feed.length) office.post('system', null, `Офис открыт. Счёт: ${office.venue()}. Рустам начинает следить за рынком.`, 'system');
 
   office.on('feed', m => broadcast({t: 'feed', m}));
@@ -124,7 +131,8 @@ async function start(){
   office.on('pending', pushState);
   office.on('run', run => broadcast({t: 'run', run}));
   office.on('react', r => broadcast({t: 'react', ...r}));
-  office.on('open', p => broadcast({t: 'toast', text: `Артур открыл ${p.dir > 0 ? 'LONG' : 'SHORT'} ${p.sym}`}));
+  office.on('open', p => broadcast({t: 'toast', text: `Артур открыл ${p.dir > 0 ? 'LONG' : 'SHORT'} ${p.sym}${office.acc.real ? ' на реальном счёте' : ''}`}));
+  office.on('accounts', () => broadcast({t: 'accounts', accounts: office.accountsPublic(), active: office.state.active}));
   office.on('reset', () => { news.state = office.state; broadcast({t: 'hello', cfg: cfgPublic(), state: office.publicState(), feed: office.state.feed.slice(0, 120), coins: coinsPayload(true), now: Date.now()}); });
   market.on('tick', async () => {
     broadcast({t: 'tick', now: Date.now(), coins: coinsPayload(false)});
@@ -155,8 +163,12 @@ async function start(){
   news.on('items', (items, first) => { if (first && items.length) office.post('nika', null, `Свежих новостей за последние часы: ${items.length}. Учту их в сводках.`, 'news'); });
   setTimeout(pollNews, 8000);
   setInterval(pollNews, CFG.newsSec * 1000);
-  if (CFG.mode === 'exchange') setInterval(async () => { await broker.balance(); pushState(); }, 60000);
-  if (CFG.mode === 'exchange') setInterval(() => office.reconcile().catch(e => console.warn('[reconcile]', e.message)), 5 * 60000);
+  const exAccounts = () => Object.values(accounts).filter(a => a.kind === 'exchange' && a.configured);
+  setInterval(async () => {
+    for (const a of exAccounts()){ if (a.ready) await a.broker.balance(); else await office.connectAccount(a.id); }
+    pushState();
+  }, 60000);
+  setInterval(() => { for (const a of exAccounts()) if (a.ready) office.reconcile(a.id).catch(e => console.warn('[reconcile]', e.message)); }, 5 * 60000);
   setInterval(() => office.save(), 30000);
   broadcast({t: 'hello', cfg: cfgPublic(), state: office.publicState(), feed: office.state.feed.slice(0, 120), coins: coinsPayload(true), now: Date.now()});
 }

@@ -25,6 +25,7 @@ function bootLive(){
   on('state', ()=>{ if (!uiReady) return; syncControls(); renderApproval(); if (activeTab==='port') renderPortfolio(false); });
   on('feed', m=>{ if (uiReady) addFeedItem(m, true); });
   on('status', renderStatus); on('conn', renderStatus);
+  on('accounts', renderAccounts); on('hello', renderAccounts); on('state', ()=>{ if (S.account && S.account.id !== shownAccount) renderAccounts(); });
   on('meetStart', ()=>{ if (!MEET.active){ gatherMeeting(); for (const a of AG_LIST) say(a, '…', 60); } updateMeetBtn(); });
   on('meeting', async m=>{
     if (m.error){ for (const a of AG_LIST) a.bubble = null; toast(m.error, 4500); endMeeting(); updateMeetBtn(); return; }
@@ -54,6 +55,7 @@ function initStaticUI(){
   $$('#filters button').forEach(b=>b.addEventListener('click', ()=>{ feedFilter = b.dataset.f; $$('#filters button').forEach(x=>x.setAttribute('aria-pressed', x===b)); renderFeed(); }));
   $('#tFeed').onclick = ()=>setTab('feed'); $('#tPort').onclick = ()=>setTab('port'); $('#tAgent').onclick = ()=>setTab('agent');
   $$('.tabs [role=tab]').forEach((b,i,all)=>b.addEventListener('keydown', e=>{ if (e.key==='ArrowRight'||e.key==='ArrowLeft'){ const j=(i+(e.key==='ArrowRight'?1:-1)+all.length)%all.length; all[j].click(); all[j].focus(); } }));
+  $('#selAccount').onchange = onAccountChange;
   $('#chkTrade').onchange = e=>wsSend({t:'trading', v:e.target.checked});
   $('#chkAuto').onchange = e=>wsSend({t:'auto', v:e.target.checked});
   $('#selProfile').onchange = e=>{ if (e.target.value!=='custom') wsSend({t:'profile', v:e.target.value}); };
@@ -78,6 +80,44 @@ function tfRu(tf){ const m = String(tf).match(/^(\d+)([mhd])$/); if (!m) return 
 function syncControls(){
   $('#chkTrade').checked = !!S.tradingOn; $('#chkAuto').checked = !!S.auto;
   const sel = $('#selProfile'); sel.querySelector('[value=custom]').hidden = S.profile!=='custom'; sel.value = S.profile;
+}
+// ---------- выбор счёта ----------
+let shownAccount = null;
+function renderAccounts(){
+  const sel = $('#selAccount'); if (!sel) return;
+  const list = (S.accounts && S.accounts.length ? S.accounts : CFGC.accounts) || [];
+  const active = (S.account && S.account.id) || CFGC.account || 'paper';
+  const acc = list.find(a=>a.id===active) || {};
+  shownAccount = active;
+  sel.innerHTML = list.map(a=>{
+    const why = !a.configured ? ' — не настроен' : (!a.ready && a.kind==='exchange') ? ' — нет связи' : '';
+    return `<option value="${a.id}"${a.id===active?' selected':''}${!a.configured?' disabled':''} title="${esc((a.error||a.note||'').slice(0,200))}">${esc(a.label + why)}${a.positions && a.id!==active ? ` · позиций: ${a.positions}` : ''}</option>`;
+  }).join('');
+  sel.value = active;
+  const real = !!acc.real;
+  if (real) document.documentElement.setAttribute('data-real', ''); else document.documentElement.removeAttribute('data-real');
+  const chip = $('#acctChip'); if (chip){ chip.textContent = real ? 'РЕАЛЬНЫЕ ДЕНЬГИ' : acc.kind==='exchange' ? 'ДЕМО-СЧЁТ' : 'ВИРТУАЛЬНЫЙ'; chip.className = 'chip-demo' + (real ? ' real' : acc.kind==='exchange' ? ' exch' : ''); }
+}
+function onAccountChange(e){
+  const id = e.target.value, list = (S.accounts && S.accounts.length ? S.accounts : CFGC.accounts) || [];
+  const a = list.find(x=>x.id===id); const back = ()=>{ e.target.value = (S.account && S.account.id) || CFGC.account; };
+  if (!a){ back(); return; }
+  if (!a.configured){ toast(a.error || 'Счёт не настроен на сервере', 4500); back(); return; }
+  if (a.real){ back(); openAcctModal(a); return; }
+  wsSend({t:'account', id}); toast(`Переключаю на «${a.label}»…`);
+}
+function openAcctModal(a){
+  const m = $('#acctModal'); $('#amTitle').textContent = `Перейти на «${a.label}»?`;
+  $('#amText').textContent = 'Агенты будут открывать и закрывать сделки на настоящие деньги этого счёта.' + (a.error && !a.ready ? ` Сейчас нет связи: ${a.error}` : '');
+  $('#amMax').textContent = (a.note.match(/ордер до (\$[\d\s,.]+)/) || [,'лимита MAX ордера'])[1];
+  $('#amAgree').checked = false; $('#amOk').disabled = true; m.hidden = false; $('#amCancel').focus();
+  $('#amAgree').onchange = ev=>{ $('#amOk').disabled = !ev.target.checked; };
+  const close = ()=>{ m.hidden = true; document.removeEventListener('keydown', onKey); $('#selAccount').focus(); };
+  const onKey = ev=>{ if (ev.key==='Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  $('#amCancel').onclick = close;
+  m.onclick = ev=>{ if (ev.target===m) close(); };
+  $('#amOk').onclick = ()=>{ wsSend({t:'account', id:a.id, confirm:true}); toast(`Подключаю «${a.label}»…`, 3500); close(); };
 }
 function renderStatus(){
   const el = $('#conn'); if (!el) return;

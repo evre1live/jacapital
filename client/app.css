@@ -350,3 +350,15 @@ a.btn{text-decoration:none}
 @media (prefers-reduced-motion: reduce){ .spin{animation:none} }
 .venue{font-size:12.5px;color:var(--muted);margin-bottom:8px}
 .msg p a,.duties a{color:var(--accent)}
+
+/* выбор счёта */
+.acct select{max-width:230px}
+.chip-demo.real{background:color-mix(in srgb,var(--down) 18%,transparent);color:var(--down)}
+.chip-demo.exch{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+html[data-real] .topbar{box-shadow:0 0 0 2px color-mix(in srgb,var(--down) 70%,transparent),var(--glass-shadow)}
+html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,var(--fill));color:var(--down);font-weight:600}
+.amlist{margin:0 0 12px;padding-left:18px;color:var(--muted);font-size:13px}
+.amlist li{margin:4px 0}
+.amcheck{display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer}
+.amcheck input{accent-color:var(--down);width:16px;height:16px}
+.acctnote{font-size:12px;color:var(--muted);margin:-4px 0 10px}
