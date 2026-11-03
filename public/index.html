@@ -1852,7 +1852,7 @@ const O3 = (()=>{
       art:'landscape', board:{bg:'#1d3a2e', grain:'#0b1a10', title:'#d4b06a'},
       rug:{kind:'persian', pal:{ivory:'#e0cfae', cream:'#ecdfc4', navy:'#1d2a4a', navy2:'#2a3b63', blue:'#4d6e98', sky:'#93abc6', gold:'#b8893a', olive:'#5d6b35', rust:'#9a3b2b', tan:'#b98d5c', ink:'#24202a', wine:'#7a2324', wine2:'#8f2f2a'}},
       light:{lamp:'#ffcb86', floor:'#ffbf7a', mul:1.15, spot:'#ffd29a', expDay:0.98, expNight:1.05, envDay:0.55, envNight:0.28, hemiNight:'#ffdfc0'}},
-    manhattan: {name:'Манхэттен',
+    manhattan: {name:'Манхэттен', props:'manhattan',
       floor:{kind:'wide', tones:['#2c2724','#332c28','#28231f','#37302b','#2f2925'], seam:'rgba(0,0,0,.6)', grain:'#120e0c', rough:0.55, clear:0.2},
       wall:{kind:'slats', c:['#3b2c23','#46342a','#110b08'], rough:0.6, clear:0.15},
       main:{kind:'marble', base:'#111113', vein:'#d9d4cb', vein2:'#8d8a86', rough:0.12, clear:1},
@@ -2475,9 +2475,11 @@ const O3 = (()=>{
     CUR = null;
   }
   function buildFloorLamp(){
+    grp('floorlamp');
     cylAt(12, 138, 0, 4, 1, M.brass); cylAt(12, 138, 1, 0.6, 49, M.brass, 12);
     cylAt(12, 138, 46, 5.2, 9, M.shade, 32, 3.6, null, true);
     LAMPS.push([12, 138, 49, 'floor']);
+    CUR = null;
   }
   function buildPlant(x, y, big){
     const r = big ? 6 : 5, h = big ? 10 : 8;
@@ -2907,7 +2909,7 @@ const O3 = (()=>{
   // ---------- мебель из моделей: заменяет процедурные группы, при ошибке остаётся старая мебель ----------
   // перед модели — +X; w — размер по X сцены, d — по Y сцены, h — высота; uniform — пропорции модели по одному размеру
   const DESK_TOP = 23;
-  const PROP_DEFS = [
+  const PROP_DEFS_CLUB = [
     // столы тумбами к агенту (он сидит у стены), к зрителю — задняя панель с латунной табличкой
     {file:'wooden_desk', mat:'wood', places: DX.map((x, i)=>({hide:['desk'+i], cx:x+31, cy:DESK_Y+12, w:64, d:26, h:DESK_TOP, rot:Math.PI/2, after:()=>{
       GRP['top'+i].position.y = DESK_TOP - DESK_H;
@@ -2924,18 +2926,43 @@ const O3 = (()=>{
     {file:'leather_sofa', mat:'leather', places:[{hide:['sofa'], cx:15.5, cy:174, d:58, uniform:'d', rot:0}]},
     {file:'leather_armchair', mat:'leather', places:[{hide:['armchair'], cx:390, cy:168, h:21, uniform:true, rot:Math.PI}]},
   ];
+  // «Манхэттен»: мебель из Tripo3D (копчёный дуб, чёрная кожа, бронза, чёрный мрамор). Перед моделей — +X, у ламп абажур — +Z
+  const PROP_DEFS_MH = [
+    {file:'mh_desk', pbr:true, clearcoat:0.25, places: DX.map((x, i)=>({hide:['desk'+i], cx:x+31, cy:DESK_Y+12, w:64, d:26, h:DESK_TOP, rot:Math.PI/2, after:()=>{
+      GRP['top'+i].position.y = DESK_TOP - DESK_H;
+      const pm = PLATES[i]; pm.position.set(x+31, 13.5, DESK_Y + 12 + 13 + 0.45); pm.rotation.set(0, 0, 0); pm.scale.setScalar(1.05);
+      boxAt(x+31 - 12.6, DESK_Y + 12 + 13 - 0.1, 13.5 - 4, 25.2, 0.5, 8, M.brass, 0.2);
+    }}))},
+    {file:'mh_chair', pbr:true, places: AG_LIST.map((a, i)=>({hide:['chair'+i], cx:a.sx, cy:SEAT_Y - 1, h:24, uniform:true, rot:-Math.PI/2}))},
+    // монитор: тонкая панель с наклоном 6°, экран-график ложится на её лицевую сторону
+    {file:'mh_monitor', pbr:true, places: DX.map((x, i)=>({hide:['monitor'+i], cx:x+9, cy:DESK_Y+11.5, z:DESK_TOP, h:14, uniform:true, rot:0, screen:{i, x:0.0262, y:0.1355, w:0.962, h:0.47, tilt:0.105}}))},
+    {file:'mh_lamp', pbr:true, places: DX.map((x, i)=>({hide:['lamp'+i], cx:x+55, cy:DESK_Y+8, z:DESK_TOP, h:14, uniform:true, rot:Math.PI}))},
+    {file:'snake_plant', mat:'plant', places: PLANTS.map(([x, y, big], k)=>({hide:['plant'+k], cx:x, cy:y, h:big ? 27 : 21, uniform:true, rot:k*1.3}))},
+    {file:'wooden_bookshelf', mat:'wood', tint:'#8a7a70', places:[{hide:['bookcase'], cx:18, cy:9.5, h:68, uniform:true, rot:-Math.PI/2}]},
+    {file:'mh_credenza', pbr:true, clearcoat:0.2, places:[{hide:['sideboard'], cx:7.8, cy:102, d:40, uniform:'d', rot:0, after:(i)=>{ GRP.sideTop.position.set(-2, i.top - 23, 0); }}]},
+    {file:'mh_table', pbr:true, clearcoat:0.6, tint:'#a3a3a3', places:[{hide:['table'], cx:TABLE.x, cy:TABLE.y, w:54, d:54, h:24.8, rot:0}]},
+    {file:'mh_sofa', pbr:true, places:[{hide:['sofa'], cx:15.5, cy:174, d:58, uniform:'d', rot:0}]},
+    {file:'mh_lounge', pbr:true, places:[{hide:['armchair'], cx:388, cy:166, h:29, uniform:true, rot:Math.PI}]},
+    {file:'mh_floorlamp', pbr:true, places:[{hide:['floorlamp'], cx:11, cy:136, h:54, uniform:true, rot:Math.PI/2}]},
+  ];
   const PROP_MAT = {wood:{roughness:0.5, clearcoat:0.45, clearcoatRoughness:0.35}, leather:{roughness:0.55, clearcoat:0.25, clearcoatRoughness:0.5, sheen:0.3}, brass:{roughness:0.35, metalness:0.25, clearcoat:0.6}, plastic:{roughness:0.4}, plant:{roughness:0.75}};
   async function loadProps(){
     let GLTFLoader = null;
     try { ({GLTFLoader} = await import('three/addons/loaders/GLTFLoader.js')); } catch(e){ return; }
     const loader = new GLTFLoader();
+    const PROP_DEFS = STY.props === 'manhattan' ? PROP_DEFS_MH : PROP_DEFS_CLUB;
     await Promise.all(PROP_DEFS.map(async def=>{
       let g;
       try { g = await fetchModel(loader, def.file, './models/props/'); }
       catch(e){ console.warn('[3D] мебель', def.file, 'не загрузилась — остаётся простая', e); return; }
       // материал: отражения и лак по типу поверхности
       g.scene.traverse(o=>{ if (!o.isMesh) return; const m0 = o.material; const o2 = PROP_MAT[def.mat] || {};
-        const m = new THREE.MeshPhysicalMaterial({map:m0.map, roughness:o2.roughness ?? 0.6, metalness:o2.metalness ?? 0, clearcoat:o2.clearcoat || 0, clearcoatRoughness:o2.clearcoatRoughness ?? 0.4, sheen:o2.sheen || 0, sheenColor:new THREE.Color('#ffd9b8')});
+        const m = def.pbr
+          // модели Tripo: свои карты нормалей, шероховатости и металла
+          ? new THREE.MeshPhysicalMaterial({map:m0.map, normalMap:m0.normalMap || null, roughnessMap:m0.roughnessMap || null, metalnessMap:m0.metalnessMap || null, roughness:m0.roughness ?? 1, metalness:m0.metalness ?? 1, clearcoat:def.clearcoat || 0, clearcoatRoughness:0.35})
+          : new THREE.MeshPhysicalMaterial({map:m0.map, roughness:o2.roughness ?? 0.6, metalness:o2.metalness ?? 0, clearcoat:o2.clearcoat || 0, clearcoatRoughness:o2.clearcoatRoughness ?? 0.4, sheen:o2.sheen || 0, sheenColor:new THREE.Color('#ffd9b8')});
+        if (def.tint) m.color.set(def.tint);
+        if (m.normalMap) m.normalScale.set(0.9, 0.9);
         o.material = m; o.castShadow = true; o.receiveShadow = true; });
       g.scene.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(g.scene), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
@@ -2951,8 +2978,8 @@ const O3 = (()=>{
         for (const h of pl.hide) if (GRP[h]) GRP[h].visible = false;
         if (pl.screen){ const sm = SCREENS[pl.screen.i]; const sc0 = pl.screen;
           const v = new THREE.Vector3(sc0.x - c.x, sc0.y - box.min.y, -c.z).multiply(new THREE.Vector3(kx, ky, kz)).applyAxisAngle(new THREE.Vector3(0, 1, 0), pl.rot);
-          sm.position.set(pl.cx + v.x, (pl.z || 0) + v.y, pl.cy + v.z); sm.rotation.y = pl.rot + Math.PI/2; sm.scale.set(sc0.w * kz / 15.6, sc0.h * ky / 12.2, 1); }
-        if (pl.after) pl.after();
+          sm.position.set(pl.cx + v.x, (pl.z || 0) + v.y, pl.cy + v.z); if (sc0.tilt) sm.rotation.set(-sc0.tilt, pl.rot + Math.PI/2, 0, 'YXZ'); else sm.rotation.y = pl.rot + Math.PI/2; sm.scale.set(sc0.w * kz / 15.6, sc0.h * ky / 12.2, 1); }
+        if (pl.after) pl.after({top: size.y*ky, kx, ky, kz, size});
       }
     }));
   }
