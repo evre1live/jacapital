@@ -1753,6 +1753,7 @@ const O3 = (()=>{
         applyDay();
         loadModels();
         loadProps();
+        loadWindowPhotos();
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ for (const k in DYN) DYN[k].last = -1; refreshStaticText(); });
         ok = true;
       } catch (e) { console.warn('[3D] недоступно, остаётся 2D:', e); failed = true; }
@@ -1818,9 +1819,27 @@ const O3 = (()=>{
     M.floor = phys('#ffffff', {map:wood, roughness:0.48, clearcoat:0.35, clearcoatRoughness:0.35});
     M.slab = phys('#3b2418', {roughness:0.55});
     M.slabTrim = phys('#6e4630', {roughness:0.45, clearcoat:0.4});
-    const wall = canvasTex(512, 512, (c, w, h)=>{ c.fillStyle = '#1c2b4b'; c.fillRect(0,0,w,h); for (let x=0;x<w;x+=32){ c.fillStyle = 'rgba(255,255,255,.035)'; c.fillRect(x,0,10,h); } noise(c, w, h, 3000, '#0a1225', 0.25); }, {repeat:[6, 1]});
-    M.wallA = std('#ffffff', {map:wall, roughness:0.92});
-    const wallB = wall.clone(); wallB.needsUpdate = true; wallB.repeat.set(3, 1); M.wallB = std('#ffffff', {map:wallB, roughness:0.92});
+    // стены: ореховые панели (стойки и рамки), вставки — ткань в клетку
+    const walnut = (rep)=>canvasTex(512, 1024, (c, w, h)=>{
+      const g = c.createLinearGradient(0,0,w,0); g.addColorStop(0,'#4a2a19'); g.addColorStop(0.5,'#563320'); g.addColorStop(1,'#462817'); c.fillStyle = g; c.fillRect(0,0,w,h);
+      for (let k=0;k<70;k++){ const x0 = (k*37 % w) + Math.sin(k)*6; c.strokeStyle = k%3 ? 'rgba(25,12,6,.22)' : 'rgba(120,72,40,.18)'; c.lineWidth = 1 + (k%4); c.beginPath();
+        for (let y=0; y<=h; y+=16){ const x = x0 + Math.sin(y*0.012 + k)*5 + Math.sin(y*0.05 + k*2)*1.5; y ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke(); }
+      for (let k=0;k<6;k++){ const cx = (k*173)%w, cy = (k*311)%h; c.strokeStyle = 'rgba(30,14,6,.18)'; c.lineWidth = 1.5; for (let r=4;r<26;r+=4){ c.beginPath(); c.ellipse(cx, cy, r*0.6, r*2.2, 0, 0, Math.PI*2); c.stroke(); } }
+      noise(c, w, h, 12000, '#1a0c05', 0.10);
+    }, {repeat:rep});
+    M.wallA = phys('#ffffff', {map:walnut([FW/34, 1]), roughness:0.45, clearcoat:0.5, clearcoatRoughness:0.3});
+    M.wallB = phys('#ffffff', {map:walnut([FD/34, 1]), roughness:0.45, clearcoat:0.5, clearcoatRoughness:0.3});
+    M.panelWood = (len)=>phys('#d8c8b8', {map:walnut([len/34, 1]), roughness:0.42, clearcoat:0.55, clearcoatRoughness:0.25});
+    // шотландка: тёмно-синяя с кэмел, как на референсе
+    M.plaidTex = canvasTex(512, 512, (c, w, h)=>{
+      c.fillStyle = '#18203a'; c.fillRect(0,0,w,h);
+      const bands = [[0.02,0.10,'rgba(190,150,100,.55)'],[0.14,0.02,'rgba(205,165,110,.75)'],[0.18,0.02,'rgba(205,165,110,.75)'],[0.34,0.012,'rgba(70,45,30,.6)'],[0.48,0.16,'rgba(180,140,92,.42)'],[0.53,0.018,'rgba(40,30,30,.5)'],[0.59,0.018,'rgba(40,30,30,.5)'],[0.75,0.02,'rgba(205,165,110,.7)'],[0.86,0.01,'rgba(205,165,110,.6)']];
+      for (const [p0, wd, col] of bands){ c.fillStyle = col; c.fillRect(p0*w, 0, wd*w, h); c.fillRect(0, p0*h, w, wd*h); }
+      // саржевое плетение и ворс
+      c.globalAlpha = 0.10; c.strokeStyle = '#000'; c.lineWidth = 1; for (let k=-h; k<w; k+=4){ c.beginPath(); c.moveTo(k, 0); c.lineTo(k+h, h); c.stroke(); } c.globalAlpha = 1;
+      noise(c, w, h, 26000, '#ffffff', 0.05); noise(c, w, h, 26000, '#000000', 0.10);
+    });
+    M.plaidTex.wrapS = M.plaidTex.wrapT = THREE.RepeatWrapping;
     M.wainsA = phys('#ffffff', {map:wainsTex(430), roughness:0.42, clearcoat:0.45, clearcoatRoughness:0.3});
     M.wainsB = phys('#ffffff', {map:wainsTex(205), roughness:0.42, clearcoat:0.45, clearcoatRoughness:0.3});
     M.mahog = phys('#5a2e1d', {roughness:0.4, clearcoat:0.65, clearcoatRoughness:0.22});
@@ -1851,7 +1870,8 @@ const O3 = (()=>{
   function wainsTex(len){
     const ppu = 6; // пикселей на единицу
     return canvasTex(Math.round(len*ppu), 34*ppu, (c, w, h)=>{
-      const g = c.createLinearGradient(0,0,0,h); g.addColorStop(0,'#5d301e'); g.addColorStop(1,'#3d1f13'); c.fillStyle = g; c.fillRect(0,0,w,h);
+      const g = c.createLinearGradient(0,0,0,h); g.addColorStop(0,'#55321f'); g.addColorStop(1,'#3a2214'); c.fillStyle = g; c.fillRect(0,0,w,h);
+      for (let k=0;k<w/6;k++){ const x0 = k*6 + Math.sin(k)*3; c.strokeStyle = k%3 ? 'rgba(20,10,5,.16)' : 'rgba(130,80,45,.12)'; c.lineWidth = 1 + k%3; c.beginPath(); for (let y=0;y<=h;y+=12){ const x = x0 + Math.sin(y*0.02 + k)*3; y ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke(); }
       for (let u=5; u+26<len; u+=32){
         const x = u*ppu, y = 6*ppu, pw = 26*ppu, ph = 21*ppu;
         c.fillStyle = 'rgba(0,0,0,.14)'; c.fillRect(x, y, pw, ph);
@@ -1879,28 +1899,180 @@ const O3 = (()=>{
     boxAt(0, 0, WH-6, FW, 2.4, 6, M.mahog); boxAt(0, 0, WH-6, 2.4, FD, 6, M.mahog);
     boxAt(0, 2.2, WH-6.4, FW, 0.4, 0.5, M.brass, 0, null, false); boxAt(2.2, 0, WH-6.4, 0.4, FD, 0.5, M.brass, 0, null, false);
     boxAt(-WT, -WT, WH, FW+WT, WT, 0.6, M.cream, 0, null, false); boxAt(-WT, 0, WH, WT, FD, 0.6, M.cream, 0, null, false);
-    // ковровая дорожка и круглый ковёр
-    const runner = canvasTex(2048, 400, (c, w, h)=>{
-      c.fillStyle = '#561c23'; c.fillRect(0,0,w,h);
-      c.strokeStyle = '#c29a4a'; c.lineWidth = 10; c.strokeRect(22, 22, w-44, h-44);
-      c.strokeStyle = 'rgba(194,154,74,.5)'; c.lineWidth = 4; c.strokeRect(44, 44, w-88, h-88);
-      for (let x=90, i=0; x<w-60; x+=82, i++) for (let y=95, j=0; y<h-60; y+=70, j++){
-        c.beginPath(); c.moveTo(x, y-20); c.lineTo(x+22, y); c.lineTo(x, y+20); c.lineTo(x-22, y); c.closePath(); c.fillStyle = (i+j)%2 ? '#1c284e' : '#7a2c2c'; c.fill();
-        c.beginPath(); c.arc(x, y, 5, 0, Math.PI*2); c.fillStyle = '#d6ae5c'; c.fill();
+    // ковровая дорожка под столами и круглый ковёр под столом для планёрок
+    const runner = canvasTex(3072, 584, drawRunnerRug);
+    const rm = std('#ffffff', {map:runner, roughness:1, alphaTest:0.5}); const r = new THREE.Mesh(new THREE.PlaneGeometry(386, 72), rm); r.rotation.x = -Math.PI/2; r.position.set(43+193, 0.12, 4+36); r.receiveShadow = true; scene.add(r);
+    const round = canvasTex(1536, 1536, drawRoundRug);
+    const rr = new THREE.Mesh(new THREE.CircleGeometry(1, 96), std('#ffffff', {map:round, roughness:1, alphaTest:0.5}));
+    rr.rotation.x = -Math.PI/2; rr.scale.set(53, 53, 1); rr.position.set(TABLE.x, 0.14, TABLE.y); rr.receiveShadow = true; scene.add(rr);
+  }
+
+  // ---------- ковры: по референсам (дорожка — светлое поле и синяя кайма, круглый — синее поле и бордовая кайма) ----------
+  const RUG = {ivory:'#e9dfc6', cream:'#f3ead6', navy:'#1c2b55', navy2:'#25386b', blue:'#5f86b8', sky:'#a3bcd8', gold:'#b88f33', olive:'#6e7b3b', rust:'#a4533a', tan:'#c7a774', ink:'#272834', wine:'#6e2424', wine2:'#82302b'};
+  function rng(seed){ let t = seed >>> 0; return ()=>{ t += 0x6D2B79F5; let r = Math.imul(t ^ t >>> 15, 1 | t); r ^= r + Math.imul(r ^ r >>> 7, 61 | r); return ((r ^ r >>> 14) >>> 0) / 4294967296; }; }
+  function rpoly(c, x, y, r, n, rot=0){ c.beginPath(); for (let k=0;k<n;k++){ const a = rot + k/n*Math.PI*2; k ? c.lineTo(x+Math.cos(a)*r, y+Math.sin(a)*r) : c.moveTo(x+Math.cos(a)*r, y+Math.sin(a)*r); } c.closePath(); }
+  function star8(c, x, y, r, col){ c.fillStyle = col; rpoly(c, x, y, r, 4, 0); c.fill(); rpoly(c, x, y, r, 4, Math.PI/4); c.fill(); }
+  function rosette(c, x, y, r, petal, ring, core, n=8){
+    c.save(); c.translate(x, y);
+    for (let k=0;k<n;k++){ c.rotate(Math.PI*2/n); c.beginPath(); c.ellipse(r*0.55, 0, r*0.45, r*0.2, 0, 0, Math.PI*2); c.fillStyle = petal; c.fill(); c.lineWidth = Math.max(1, r*0.04); c.strokeStyle = RUG.ink; c.globalAlpha = 0.55; c.stroke(); c.globalAlpha = 1; }
+    c.beginPath(); c.arc(0, 0, r*0.36, 0, Math.PI*2); c.fillStyle = ring; c.fill();
+    c.beginPath(); c.arc(0, 0, r*0.17, 0, Math.PI*2); c.fillStyle = core; c.fill(); c.restore();
+  }
+  function octMotif(c, x, y, r, fill, inner, core){
+    c.fillStyle = fill; rpoly(c, x, y, r, 8, Math.PI/8); c.fill(); c.lineWidth = Math.max(1.5, r*0.05); c.strokeStyle = RUG.ink; c.globalAlpha = 0.5; c.stroke(); c.globalAlpha = 1;
+    rosette(c, x, y, r*0.72, inner, core, RUG.gold, 8);
+    for (let k=0;k<4;k++){ const a = k*Math.PI/2 + Math.PI/4; star8(c, x + Math.cos(a)*r*0.8, y + Math.sin(a)*r*0.8, r*0.11, RUG.cream); }
+  }
+  function sprig(c, x, y, len, ang, stem, leaf){
+    c.save(); c.translate(x, y); c.rotate(ang); c.strokeStyle = stem; c.lineWidth = Math.max(2, len*0.07); c.lineCap = 'round';
+    c.beginPath(); c.moveTo(-len/2, 0); c.lineTo(len/2, 0); c.stroke();
+    for (let k=0;k<3;k++){ const px = -len/2 + len*(0.3 + k*0.22); for (const sgn of [-1, 1]){ c.beginPath(); c.moveTo(px, 0); c.lineTo(px - len*0.14, sgn*len*0.22); c.lineTo(px - len*0.05, sgn*len*0.08); c.closePath(); c.fillStyle = leaf; c.fill(); } }
+    c.beginPath(); c.moveTo(len/2 + len*0.12, 0); c.lineTo(len/2 - len*0.04, -len*0.1); c.lineTo(len/2 - len*0.04, len*0.1); c.closePath(); c.fillStyle = stem; c.fill();
+    c.restore();
+  }
+  function hookMotif(c, x, y, s, col){ c.strokeStyle = col; c.lineWidth = s*0.22; c.lineCap = 'square'; c.beginPath(); c.moveTo(x - s, y - s*0.5); c.lineTo(x - s, y + s*0.5); c.lineTo(x, y + s*0.5); c.lineTo(x, y - s*0.5); c.lineTo(x + s, y - s*0.5); c.lineTo(x + s, y + s*0.5); c.stroke(); }
+  function weave(c, w, h, cell, a=0.06){
+    c.globalAlpha = a; c.fillStyle = '#000';
+    for (let x=0; x<w; x+=cell) c.fillRect(x, 0, 1, h);
+    for (let y=0; y<h; y+=cell) c.fillRect(0, y, w, 1);
+    c.globalAlpha = 1; noise(c, w, h, w*h/40, '#000000', 0.07); noise(c, w, h, w*h/90, '#ffffff', 0.05);
+  }
+  function fringeX(c, x0, x1, y0, y1){ // нити бахромы по короткой стороне
+    for (let y=y0; y<y1; y+=5){ const len = (x1 - x0) * (0.75 + ((y*7919)%13)/52); c.strokeStyle = (y/5)%2 ? '#efe6d2' : '#e2d6bc'; c.lineWidth = 2.4; c.beginPath(); const dir = x1 > x0 ? 1 : -1; c.moveTo(x0, y); c.quadraticCurveTo(x0 + dir*len*0.5, y + Math.sin(y)*2, x0 + dir*len, y + Math.sin(y*0.3)*3); c.stroke(); }
+  }
+  function drawRunnerRug(c, w, h){
+    c.clearRect(0, 0, w, h);
+    const F = Math.round(w*0.012), x0 = F, x1 = w - F, W = x1 - x0;
+    fringeX(c, x0, 0, h*0.04, h*0.96); fringeX(c, x1, w, h*0.04, h*0.96);
+    // основа и каймы
+    c.fillStyle = RUG.tan; c.fillRect(x0, 0, W, h);
+    const g1 = h*0.022, guard = h*0.045, bord = h*0.16;
+    c.fillStyle = RUG.cream; c.fillRect(x0 + g1, g1, W - g1*2, h - g1*2);
+    const bx = x0 + g1 + guard, by = g1 + guard;
+    c.fillStyle = RUG.navy; c.fillRect(bx, by, x1 - g1 - guard - bx, h - by*2);
+    const fx0 = bx + bord, fy0 = by + bord, fx1 = x1 - g1 - guard - bord, fy1 = h - by - bord;
+    c.fillStyle = RUG.cream; c.fillRect(fx0 - guard, fy0 - guard, fx1 - fx0 + guard*2, fy1 - fy0 + guard*2);
+    c.fillStyle = RUG.ivory; c.fillRect(fx0, fy0, fx1 - fx0, fy1 - fy0);
+    // «Т»-узор на бордюрных полосах
+    const tees = (ax, ay, bx2, by2, horiz) => { const n = Math.floor((horiz ? bx2 - ax : by2 - ay) / (guard*0.9)); for (let k=0;k<n;k++){ const t = (k + 0.5)/n; const px = horiz ? ax + (bx2 - ax)*t : ax, py = horiz ? ay : ay + (by2 - ay)*t; c.fillStyle = k%2 ? RUG.navy : RUG.rust; c.fillRect(px - guard*0.12, py - guard*0.25, guard*0.24, guard*0.5); c.fillRect(px - guard*0.3, py - guard*0.25, guard*0.6, guard*0.12); } };
+    tees(x0 + g1, g1 + guard/2, x1 - g1, 0, true); tees(x0 + g1, h - g1 - guard/2, x1 - g1, 0, true);
+    tees(fx0 - guard, fy0 - guard/2, fx1 + guard, 0, true); tees(fx0 - guard, fy1 + guard/2, fx1 + guard, 0, true);
+    tees(x0 + g1 + guard/2, g1 + guard, 0, h - g1 - guard, false); tees(x1 - g1 - guard/2, g1 + guard, 0, h - g1 - guard, false);
+    // мотивы каймы: восьмиугольные розетки и ветки
+    const bm = by + bord/2, step = bord*2.2;
+    for (let x = bx + bord*0.9, k = 0; x < x1 - g1 - guard - bord*0.6; x += step, k++){
+      for (const yy of [bm, h - bm]){
+        octMotif(c, x, yy, bord*0.36, k%2 ? RUG.cream : RUG.sky, k%2 ? RUG.rust : RUG.navy2, RUG.cream);
+        sprig(c, x + step/2, yy, bord*0.8, 0, RUG.gold, k%2 ? RUG.blue : RUG.cream);
       }
-      noise(c, w, h, 40000, '#000', 0.10); noise(c, w, h, 15000, '#ffd9a0', 0.05);
-    });
-    const rm = std('#ffffff', {map:runner, roughness:1}); const r = new THREE.Mesh(new THREE.PlaneGeometry(380, 72), rm); r.rotation.x = -Math.PI/2; r.position.set(46+190, 0.12, 4+36); r.receiveShadow = true; scene.add(r);
-    const round = canvasTex(1024, 1024, (c, w, h)=>{
-      c.translate(w/2, h/2);
-      const rings = [[500,'#b8913f'],[470,'#1e2b4f'],[400,'#7a2028'],[372,'#1e2b4f'],[160,'#7a2028'],[128,'#b8913f'],[100,'#1e2b4f']];
-      for (const [rr, col] of rings){ c.beginPath(); c.arc(0,0,rr,0,Math.PI*2); c.fillStyle = col; c.fill(); }
-      for (let k=0;k<16;k++){ c.rotate(Math.PI/8); c.beginPath(); c.ellipse(265, 0, 64, 26, 0, 0, Math.PI*2); c.fillStyle = k%2 ? '#b8913f' : '#963c37'; c.fill(); c.beginPath(); c.ellipse(265,0,24,10,0,0,Math.PI*2); c.fillStyle = '#1e2b4f'; c.fill(); }
-      c.setLineDash([14,16]); c.strokeStyle = '#d6ae5c'; c.lineWidth = 6; c.beginPath(); c.arc(0,0,440,0,Math.PI*2); c.stroke(); c.setLineDash([]);
-      c.setTransform(1,0,0,1,0,0); noise(c, w, h, 30000, '#000', 0.12);
-    });
-    const rr = new THREE.Mesh(new THREE.CircleGeometry(1, 64), std('#ffffff', {map:round, roughness:1, transparent:false}));
-    rr.rotation.x = -Math.PI/2; rr.scale.set(50, 46, 1); rr.position.set(TABLE.x, 0.14, TABLE.y); rr.receiveShadow = true; scene.add(rr);
+    }
+    for (const xx of [bx + bord/2, x1 - g1 - guard - bord/2]){ octMotif(c, xx, h/2, bord*0.34, RUG.cream, RUG.rust, RUG.cream); sprig(c, xx, h/2 - bord*1.1, bord*0.7, Math.PI/2, RUG.gold, RUG.blue); sprig(c, xx, h/2 + bord*1.1, bord*0.7, -Math.PI/2, RUG.gold, RUG.blue); }
+    // поле: крупные медальоны по центру, вокруг — розетки, звёзды, крюки и ветки
+    const FH = fy1 - fy0, cy = (fy0 + fy1)/2, period = FH*2.1;
+    let i = 0;
+    for (let x = fx0 + period*0.55; x < fx1 - period*0.2; x += period, i++){
+      if (i % 2 === 0){
+        c.fillStyle = RUG.gold; c.save(); c.translate(x, cy);
+        for (let k=0;k<4;k++){ c.rotate(Math.PI/2); c.fillRect(-FH*0.07, 0, FH*0.14, FH*0.34); c.fillRect(-FH*0.17, FH*0.18, FH*0.34, FH*0.08); }
+        c.restore(); rosette(c, x, cy, FH*0.17, RUG.sky, RUG.navy, RUG.gold);
+      } else {
+        octMotif(c, x, cy, FH*0.26, RUG.navy, RUG.blue, RUG.cream);
+      }
+      for (const sy of [-1, 1]){
+        rosette(c, x + period*0.27, cy + sy*FH*0.3, FH*0.11, i%2 ? RUG.olive : RUG.blue, RUG.cream, RUG.rust);
+        rosette(c, x - period*0.27, cy + sy*FH*0.3, FH*0.09, i%2 ? RUG.rust : RUG.sky, RUG.navy, RUG.gold);
+        star8(c, x, cy + sy*FH*0.38, FH*0.05, RUG.navy);
+        hookMotif(c, x + period*0.12, cy + sy*FH*0.2, FH*0.035, RUG.tan);
+        hookMotif(c, x - period*0.12, cy - sy*FH*0.2, FH*0.035, RUG.olive);
+        sprig(c, x + period*0.46, cy + sy*FH*0.22, FH*0.22, sy*0.6, RUG.olive, RUG.gold);
+      }
+      star8(c, x + period/2, cy, FH*0.07, RUG.navy2); rosette(c, x + period/2, cy, FH*0.05, RUG.gold, RUG.cream, RUG.rust, 6);
+      // усики от медальона, как на старых коврах
+      c.strokeStyle = i%2 ? RUG.olive : RUG.gold; c.lineWidth = Math.max(2, FH*0.012); c.globalAlpha = 0.8;
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]){ c.beginPath(); c.moveTo(x + sx*FH*0.2, cy + sy*FH*0.08); c.quadraticCurveTo(x + sx*FH*0.42, cy + sy*FH*0.05, x + sx*FH*0.5, cy + sy*FH*0.26); c.stroke(); }
+      c.globalAlpha = 1;
+    }
+    // мелкие мотивы по всему полю (сетка со случайным сдвигом, вокруг крупных — пусто)
+    const R0 = rng(7), big = [];
+    for (let x = fx0 + period*0.55, k = 0; x < fx1 - period*0.2; x += period, k++){ big.push([x, cy, FH*0.36]); for (const sy of [-1,1]){ big.push([x + period*0.27, cy + sy*FH*0.3, FH*0.15]); big.push([x - period*0.27, cy + sy*FH*0.3, FH*0.13]); } big.push([x + period/2, cy, FH*0.1]); }
+    const cell = FH*0.12, smallCols = [RUG.navy, RUG.rust, RUG.blue, RUG.olive, RUG.gold, RUG.navy2, RUG.sky];
+    for (let y = fy0 + cell*0.6; y < fy1 - cell*0.4; y += cell) for (let x = fx0 + cell*0.6; x < fx1 - cell*0.4; x += cell){
+      const px = x + (R0() - 0.5)*cell*0.6, py = y + (R0() - 0.5)*cell*0.6;
+      if (big.some(([bx2, by2, br]) => Math.hypot(px - bx2, py - by2) < br + cell*0.35)) continue;
+      const t = R0(), col = smallCols[Math.floor(R0()*smallCols.length)], sz = cell*(0.22 + R0()*0.16);
+      if (t < 0.28) star8(c, px, py, sz*0.8, col);
+      else if (t < 0.52) rosette(c, px, py, sz*1.1, col, RUG.cream, RUG.rust, 6);
+      else if (t < 0.7) hookMotif(c, px, py, sz*0.55, col);
+      else if (t < 0.86){ c.fillStyle = col; rpoly(c, px, py, sz*0.7, 4, 0); c.fill(); c.fillStyle = RUG.cream; rpoly(c, px, py, sz*0.3, 4, 0); c.fill(); }
+      else sprig(c, px, py, sz*2.2, (R0() - 0.5)*2, RUG.olive, RUG.gold);
+    }
+    weave(c, w, h, Math.max(3, Math.round(h/220)));
+    // мягкая тень по краю
+    const eg = c.createLinearGradient(0, 0, 0, h); eg.addColorStop(0, 'rgba(0,0,0,.18)'); eg.addColorStop(0.03, 'rgba(0,0,0,0)'); eg.addColorStop(0.97, 'rgba(0,0,0,0)'); eg.addColorStop(1, 'rgba(0,0,0,.18)');
+    c.globalCompositeOperation = 'source-atop'; c.fillStyle = eg; c.fillRect(x0, 0, W, h); c.globalCompositeOperation = 'source-over';
+  }
+  function drawRoundRug(c, w, h){
+    c.clearRect(0, 0, w, h);
+    const R = w/2; c.save(); c.translate(R, R);
+    // бахрома по кругу
+    for (let k=0;k<720;k++){ const a = k/720*Math.PI*2, r0 = R*0.945, r1 = R*(0.985 + ((k*37)%11)/600); c.strokeStyle = k%2 ? '#efe6d2' : '#ddd0b4'; c.lineWidth = 2; c.beginPath(); c.moveTo(Math.cos(a)*r0, Math.sin(a)*r0); c.lineTo(Math.cos(a + 0.004)*r1, Math.sin(a + 0.004)*r1); c.stroke(); }
+    const ring = (r, col) => { c.beginPath(); c.arc(0, 0, R*r, 0, Math.PI*2); c.fillStyle = col; c.fill(); };
+    ring(0.95, RUG.cream); ring(0.915, RUG.navy); ring(0.895, RUG.ivory); ring(0.885, RUG.wine);
+    // кайма: вьющаяся лоза с цветами
+    const rb = R*0.81, n = 30;
+    c.strokeStyle = RUG.tan; c.lineWidth = R*0.012; c.beginPath();
+    for (let k=0; k<=720; k++){ const a = k/720*Math.PI*2, rr = rb + Math.sin(a*n)*R*0.035; k ? c.lineTo(Math.cos(a)*rr, Math.sin(a)*rr) : c.moveTo(Math.cos(a)*rr, Math.sin(a)*rr); } c.stroke();
+    for (let k=0;k<n*2;k++){ const a = (k + 0.25)/(n*2)*Math.PI*2, rr = rb + (k%2 ? -1 : 1)*R*0.035;
+      c.save(); c.rotate(a); c.translate(rr, 0);
+      if (k%2){ rosette(c, 0, 0, R*0.034, RUG.cream, RUG.navy, RUG.gold, 8); } else { c.beginPath(); c.ellipse(0, 0, R*0.022, R*0.04, 0, 0, Math.PI*2); c.fillStyle = RUG.navy2; c.fill(); c.beginPath(); c.ellipse(0, 0, R*0.012, R*0.022, 0, 0, Math.PI*2); c.fillStyle = RUG.sky; c.fill(); }
+      for (const s of [-1, 1]){ c.beginPath(); c.ellipse(s*R*0.006, s*R*0.05, R*0.01, R*0.022, s*0.6, 0, Math.PI*2); c.fillStyle = RUG.olive; c.fill(); }
+      c.restore(); }
+    ring(0.745, RUG.ivory); ring(0.735, RUG.gold); ring(0.725, RUG.navy);
+    // бусинки на охранной полосе
+    for (let k=0;k<160;k++){ const a = k/160*Math.PI*2; c.beginPath(); c.arc(Math.cos(a)*R*0.74, Math.sin(a)*R*0.74, R*0.004, 0, Math.PI*2); c.fillStyle = k%2 ? RUG.wine : RUG.navy; c.fill(); }
+    // поле: симметричные ветви с пальметтами, листьями и цветами
+    for (let k=0;k<8;k++){
+      c.save(); c.rotate(k*Math.PI/4 + Math.PI/8);
+      for (const s of [1, -1]){
+        c.save(); c.scale(1, s);
+        c.strokeStyle = RUG.tan; c.lineWidth = R*0.008; c.globalAlpha = 0.85;
+        c.beginPath(); c.moveTo(R*0.3, 0); c.bezierCurveTo(R*0.42, R*0.12, R*0.55, R*0.05, R*0.66, R*0.16); c.stroke();
+        c.beginPath(); c.moveTo(R*0.45, R*0.07); c.bezierCurveTo(R*0.48, R*0.2, R*0.4, R*0.26, R*0.33, R*0.24); c.stroke(); c.globalAlpha = 1;
+        // пальметта
+        c.save(); c.translate(R*0.6, R*0.11); c.rotate(-0.4);
+        c.beginPath(); c.moveTo(0, -R*0.05); c.bezierCurveTo(R*0.05, -R*0.02, R*0.04, R*0.04, 0, R*0.06); c.bezierCurveTo(-R*0.04, R*0.04, -R*0.05, -R*0.02, 0, -R*0.05); c.fillStyle = RUG.tan; c.fill();
+        c.beginPath(); c.moveTo(0, -R*0.025); c.bezierCurveTo(R*0.025, 0, R*0.02, R*0.03, 0, R*0.035); c.bezierCurveTo(-R*0.02, R*0.03, -R*0.025, 0, 0, -R*0.025); c.fillStyle = RUG.rust; c.fill(); c.restore();
+        rosette(c, R*0.4, R*0.17, R*0.03, RUG.cream, RUG.gold, RUG.wine, 8);
+        rosette(c, R*0.68, R*0.26, R*0.026, RUG.sky, RUG.cream, RUG.navy, 6);
+        for (const [lx, ly, la] of [[0.5, 0.1, 0.7], [0.36, 0.25, -0.5], [0.55, 0.2, 1.2], [0.64, 0.07, -0.2]]){ c.beginPath(); c.ellipse(R*lx, R*ly, R*0.022, R*0.008, la, 0, Math.PI*2); c.fillStyle = RUG.olive; c.fill(); }
+        for (const [dx, dy] of [[0.47, 0.29], [0.62, 0.32], [0.33, 0.12], [0.7, 0.05]]){ c.beginPath(); c.arc(R*dx, R*dy, R*0.009, 0, Math.PI*2); c.fillStyle = RUG.cream; c.fill(); }
+        c.restore();
+      }
+      c.restore();
+    }
+    // мелкий цветочный узор по всему полю: один сектор, повторённый 16 раз с отражением
+    const R1 = rng(11), bits = [];
+    for (let k=0;k<70;k++){ const rr = R*(0.3 + R1()*0.4), a = R1()*Math.PI/8; bits.push([rr, a, R1(), R1()]); }
+    for (let k=0;k<16;k++) for (const sgn of [1, -1]){
+      c.save(); c.rotate(k*Math.PI/8); c.scale(1, sgn);
+      for (const [rr, a, t, u] of bits){ const x = Math.cos(a)*rr, y = Math.sin(a)*rr;
+        if (t < 0.35){ c.beginPath(); c.ellipse(x, y, R*0.014, R*0.005, a + u*3, 0, Math.PI*2); c.fillStyle = u < 0.5 ? RUG.olive : '#4f6a6e'; c.fill(); }
+        else if (t < 0.6){ c.beginPath(); c.arc(x, y, R*0.0055, 0, Math.PI*2); c.fillStyle = u < 0.5 ? RUG.cream : RUG.sky; c.fill(); }
+        else if (t < 0.8) rosette(c, x, y, R*0.016, u < 0.5 ? RUG.tan : RUG.cream, RUG.wine, RUG.gold, 6);
+        else { c.strokeStyle = RUG.tan; c.globalAlpha = 0.6; c.lineWidth = R*0.004; c.beginPath(); c.arc(x, y, R*0.03, a, a + 1.6); c.stroke(); c.globalAlpha = 1; } }
+      c.restore();
+    }
+    // центральный медальон-звезда
+    c.save();
+    for (let k=0;k<16;k++){ c.rotate(Math.PI/8); c.beginPath(); c.moveTo(R*0.15, -R*0.06); c.quadraticCurveTo(R*0.36, 0, R*0.15, R*0.06); c.closePath(); c.fillStyle = k%2 ? RUG.tan : '#b07a45'; c.fill(); c.strokeStyle = RUG.cream; c.lineWidth = R*0.005; c.stroke();
+      c.beginPath(); c.moveTo(R*0.17, -R*0.025); c.quadraticCurveTo(R*0.27, 0, R*0.17, R*0.025); c.closePath(); c.fillStyle = k%2 ? RUG.rust : RUG.wine; c.fill(); }
+    c.restore();
+    ring(0.19, RUG.cream); ring(0.18, RUG.navy);
+    for (let k=0;k<12;k++){ c.save(); c.rotate(k*Math.PI/6); c.beginPath(); c.ellipse(R*0.11, 0, R*0.05, R*0.018, 0, 0, Math.PI*2); c.fillStyle = k%2 ? RUG.tan : RUG.gold; c.fill(); c.restore(); }
+    rosette(c, 0, 0, R*0.07, RUG.cream, RUG.wine, RUG.gold, 8);
+    c.restore();
+    // ворс и узелки
+    c.save(); c.beginPath(); c.arc(R, R, R*0.95, 0, Math.PI*2); c.clip(); weave(c, w, h, Math.max(3, Math.round(w/400))); c.restore();
   }
 
   // ---------- мебель ----------
@@ -2062,6 +2234,12 @@ const O3 = (()=>{
   // ---------- стены: окна, табло, экран, доска, часы, логотип, картина ----------
   function buildDecor(){
     buildWindow(34, 112, false); buildWindow(336, 414, true);
+    // филёнки: клетка и дерево в ореховых рамках (стена A — с окнами, стена B — с логотипом)
+    wallPanel('A', 127, 324, 38, 86, 'plaid');
+    wallPanel('A', 3, 19, 38, 96, 'wood');
+    wallPanel('B', 5, 56, 38, 96, 'plaid');
+    wallPanel('B', 61, 143, 38, 96, 'wood');
+    wallPanel('B', 148, 201, 38, 96, 'plaid');
     // табло
     boxAt(127, 0, 88.5, 196, 1.6, 16, M.brass, 0.4);
     const tick = canvasTex(4096, 96, (c, w, h)=>drawTicker(c, w, h), {});
@@ -2101,6 +2279,18 @@ const O3 = (()=>{
     boxAt(0.5, 159, 89.6, 3, 28, 1.2, M.brass, 0.4);
     DYN.chart.last = DYN.board.last = DYN.ticker.last = DYN.clock.last = -1;
   }
+  function wallPanel(wall, u0, u1, z0, z1, kind){
+    const w = u1 - u0, h = z1 - z0, inset = 1.6;
+    let mat;
+    if (kind === 'plaid'){ const t = M.plaidTex.clone(); t.needsUpdate = true; t.repeat.set((w - inset*2)/13, (h - inset*2)/13); mat = std('#ffffff', {map:t, roughness:0.95}); }
+    else mat = M.panelWood(w);
+    const p = wallPlane(wall, u0 + w/2, z0 + h/2, w - inset*2, h - inset*2, mat, 0.25); p.receiveShadow = true;
+    // рамка-молдинг
+    const fr = (a0, b0, a1, b1)=> wall === 'A' ? boxAt(a0, 0, b0, a1 - a0, 1.1, b1 - b0, M.mahogL, 0.25, null, false) : boxAt(0, a0, b0, 1.1, a1 - a0, b1 - b0, M.mahogL, 0.25, null, false);
+    fr(u0, z0, u1, z0 + inset); fr(u0, z1 - inset, u1, z1); fr(u0, z0, u0 + inset, z1); fr(u1 - inset, z0, u1, z1);
+    // верхний и нижний брус
+    if (wall === 'A'){ boxAt(u0 - 1, 0, z0 - 1.4, w + 2, 0.7, 1.4, M.mahogD, 0, null, false); } else { boxAt(0, u0 - 1, z0 - 1.4, 0.7, w + 2, 1.4, M.mahogD, 0, null, false); }
+  }
   function buildWindow(u0, u1, tower){
     const w = u1-u0, z0 = 40, z1 = 96, h = z1-z0;
     const city = canvasTex(512, Math.round(512*h/w), (c, W2, H2)=>{
@@ -2117,7 +2307,7 @@ const O3 = (()=>{
     });
     const cityDay = canvasTex(512, Math.round(512*h/w), (c, W2, H2)=>drawCityDay(c, W2, H2, W2/w, h, u0, tower));
     const cm = new THREE.MeshBasicMaterial({map:city, toneMapped:false, color:new THREE.Color(0.85,0.85,0.9)});
-    CITY.push({mat:cm, night:city, day:cityDay});
+    CITY.push({mat:cm, night:city, day:cityDay, u0, u1, z0, z1});
     wallPlane('A', u0+w/2, z0+h/2, w, h, cm, 0.35);
     buildSunPatch(u0, u1, z0, z1);
     wallPlane('A', u0+w/2, z0+h/2, w, h, M.glass, 1.4);
@@ -2179,9 +2369,25 @@ const O3 = (()=>{
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({map:tex, transparent:true, opacity:0.6, blending:THREE.AdditiveBlending, depthWrite:false, toneMapped:false, color:new THREE.Color('#ffe7b8')}));
     m.renderOrder = 2; scene.add(m); SUN.push(m);
   }
+  // фото за окнами: одна панорама на всю стену (models/env/nyc_day.jpg и nyc_night.jpg, кадр одинаковый);
+  // каждое окно показывает свой кусок. Нет файлов — остаётся нарисованный город.
+  function loadWindowPhotos(){
+    const tl = new THREE.TextureLoader();
+    const one = (file, key)=> tl.load(`./models/env/${file}`, tex=>{
+      const asp = tex.image.width / tex.image.height, panoH = FW / asp;   // высота панорамы в единицах сцены
+      for (const cty of CITY){
+        const t = tex.clone(); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+        const w = cty.u1 - cty.u0, h = cty.z1 - cty.z0;
+        t.repeat.set(w / FW, Math.min(1, h / panoH)); t.offset.set(cty.u0 / FW, Math.max(0, Math.min(1 - t.repeat.y, 0.42 - t.repeat.y/2)));
+        t.needsUpdate = true; cty[key] = t;
+      }
+      applyDay();
+    }, undefined, ()=>{});
+    one('nyc_day.jpg', 'photoDay'); one('nyc_night.jpg', 'photoNight');
+  }
   function applyDay(){
     if (!scene) return;
-    for (const cty of CITY){ cty.mat.map = DAY ? cty.day : cty.night; cty.mat.color.set(DAY ? '#ffffff' : '#d9d9e6'); cty.mat.needsUpdate = true; }
+    for (const cty of CITY){ cty.mat.map = DAY ? (cty.photoDay || cty.day) : (cty.photoNight || cty.night); cty.mat.color.set(DAY ? '#ffffff' : '#d9d9e6'); cty.mat.needsUpdate = true; }
     for (const m of SUN) m.visible = DAY;
     renderer.toneMappingExposure = DAY ? 1.0 : 1.08;
     scene.environmentIntensity = DAY ? 0.62 : 0.32;
@@ -2429,14 +2635,15 @@ const O3 = (()=>{
   // перед модели — +X; w — размер по X сцены, d — по Y сцены, h — высота; uniform — пропорции модели по одному размеру
   const DESK_TOP = 23;
   const PROP_DEFS = [
-    {file:'wooden_desk', mat:'wood', places: DX.map((x, i)=>({hide:['desk'+i], cx:x+31, cy:DESK_Y+12, w:64, d:26, h:DESK_TOP, rot:-Math.PI/2, after:()=>{
-      GRP['top'+i].position.y = DESK_TOP - DESK_H; GRP['lamp'+i].position.y = DESK_TOP - DESK_H;
-      const pm = PLATES[i]; pm.position.set(x+37, DESK_TOP + 3.3, DESK_Y + 12 + 13 - 2.2); pm.rotation.x = -0.22; pm.scale.setScalar(0.82);
-      boxAt(x+27.5, DESK_Y + 12 + 13 - 3.6, DESK_TOP, 19, 2.6, 1, M.mahogD, 0.3);
+    // столы тумбами к агенту (он сидит у стены), к зрителю — задняя панель с латунной табличкой
+    {file:'wooden_desk', mat:'wood', places: DX.map((x, i)=>({hide:['desk'+i], cx:x+31, cy:DESK_Y+12, w:64, d:26, h:DESK_TOP, rot:Math.PI/2, after:()=>{
+      GRP['top'+i].position.y = DESK_TOP - DESK_H;
+      const pm = PLATES[i]; pm.position.set(x+31, 13.5, DESK_Y + 12 + 13 + 0.45); pm.rotation.set(0, 0, 0); pm.scale.setScalar(1.05);
+      boxAt(x+31 - 12.6, DESK_Y + 12 + 13 - 0.1, 13.5 - 4, 25.2, 0.5, 8, M.brass, 0.2);
     }}))},
     {file:'office_chair', mat:'leather', places: AG_LIST.map((a, i)=>({hide:['chair'+i], cx:a.sx, cy:SEAT_Y - 1, h:21.5, uniform:true, rot:-Math.PI/2}))},
     {file:'monitor', mat:'plastic', places: DX.map((x, i)=>({hide:['monitor'+i], cx:x+8.5, cy:DESK_Y+11.5, z:DESK_TOP, h:15.5, uniform:true, rot:0, screen:{i, x:0.099, y:0.468, w:0.92, h:0.56}}))},
-    {file:'desk_lamp', mat:'brass', places: DX.map((x, i)=>({hide:['lamp'+i], cx:x+55, cy:DESK_Y+6, z:DESK_TOP, h:13, uniform:true, rot:-Math.PI/2}))},
+    {file:'desk_lamp', mat:'brass', places: DX.map((x, i)=>({hide:['lamp'+i], cx:x+55, cy:DESK_Y+7, z:DESK_TOP, h:13, uniform:true, rot:Math.PI/2}))},
     {file:'snake_plant', mat:'plant', places: PLANTS.map(([x, y, big], k)=>({hide:['plant'+k], cx:x, cy:y, h:big ? 27 : 21, uniform:true, rot:k*1.3}))},
     {file:'wooden_bookshelf', mat:'wood', places:[{hide:['bookcase'], cx:18, cy:9.5, h:68, uniform:true, rot:-Math.PI/2}]},
     {file:'wooden_cabinet', mat:'wood', places:[{hide:['sideboard'], cx:10, cy:102, w:16, d:33, h:21, rot:0, after:()=>{ GRP.sideTop.position.y = -2; }}]},
