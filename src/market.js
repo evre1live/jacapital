@@ -43,8 +43,12 @@ export class Market extends EventEmitter {
   async pollTickers(){
     const list = Object.values(this.coins).map(c => c.symbol);
     try {
-      const t = await this.ex.fetchTickers(list);
+      // полный тикер за 24 ч (вес 40 у Binance) — раз в минуту ради изменения за сутки; в остальное время только цены (вес 2)
       const now = Date.now(); const closed = [];
+      const cheap = this.ex.has && this.ex.has.fetchLastPrices && this.fullAt && now - this.fullAt < 60000;
+      let t;
+      if (cheap){ const lp = await this.ex.fetchLastPrices(list); t = {}; for (const k in lp) t[k] = {last: lp[k].price}; }
+      else { t = await this.ex.fetchTickers(list); this.fullAt = now; }
       for (const c of Object.values(this.coins)){
         const tk = t[c.symbol]; if (!tk) continue;
         const p = +(tk.last ?? tk.close ?? ((tk.bid && tk.ask) ? (tk.bid + tk.ask) / 2 : 0)); if (!(p > 0)) continue;
