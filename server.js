@@ -200,7 +200,7 @@ async function runBacktestBg(why){
   try {
     // для фьючерсов — то же подключение, что и котировки: общий учёт лимитов Binance и без второй загрузки рынков
     const ex = CFG.marketType === 'swap' ? data : new ccxt.binance({enableRateLimit: true, timeout: 20000, options: {defaultType: 'swap', fetchMarkets: ['linear']}});
-    const coins = Object.keys(market.coins), now = Date.now();
+    const coins = (CFG.coinsActive && CFG.coinsActive.length ? CFG.coinsActive : Object.keys(market.coins)).filter(c => market.coins[c]), now = Date.now();
     const hist = await loadAll({ex, coins, symbolFor: b => symbolFor(b, 'swap'), now, log: btStatus});
     BT.hist = hist; BT.histTs = now;
     btStatus('считаю стратегии');
@@ -257,7 +257,7 @@ async function ensureHist(){
   if (BT.loading) return BT.loading;
   BT.loading = (async () => {
     const ex = CFG.marketType === 'swap' ? data : new ccxt.binance({enableRateLimit: true, timeout: 20000, options: {defaultType: 'swap', fetchMarkets: ['linear']}});
-    const hist = await loadAll({ex, coins: Object.keys(market.coins), symbolFor: b => symbolFor(b, 'swap'), now: Date.now()});
+    const hist = await loadAll({ex, coins: (CFG.coinsActive && CFG.coinsActive.length ? CFG.coinsActive : Object.keys(market.coins)).filter(c => market.coins[c]), symbolFor: b => symbolFor(b, 'swap'), now: Date.now()});
     BT.hist = hist; BT.histTs = Date.now(); return hist;
   })();
   try { return await BT.loading; } finally { BT.loading = null; }

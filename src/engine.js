@@ -38,6 +38,8 @@ export class Engine {
   get st(){ return this.office.state.strat; }
   get P(){ return this.st.params; }
   get coins(){ return Object.keys(this.market.coins); }
+  // монеты, по которым стратегии открывают сделки; остальные (выбывшие из набора) только закрываются
+  get active(){ const a = this.CFG.coinsActive; return a && a.length ? this.coins.filter(s => a.includes(s)) : this.coins; }
 
   // ---------- данные ----------
   async fetchCols(sym, tf, limit){
@@ -84,7 +86,7 @@ export class Engine {
       if (!this.ok) await this.init();
       if (!this.ok) return;
       // набор монет изменился (еженедельный пересчёт самых ликвидных) — сразу привести позиции к целям
-      const key = this.coins.join(','); if (this.st.coinsKey !== key){ const first = !this.st.coinsKey; this.st.coinsKey = key; this.st.kick = first ? 'набор монет расширен' : 'обновился набор монет'; }
+      const key = this.active.join(','); if (this.st.coinsKey !== key){ const first = !this.st.coinsKey; this.st.coinsKey = key; this.st.kick = first ? 'набор монет расширен' : 'обновился набор монет'; }
       const now = Date.now(), last = this.st.last;
       const dayBar = Math.floor(now / DAY) * DAY - DAY, hourBar = Math.floor(now / H) * H - H, fundEv = Math.floor(now / FUND) * FUND;
       // дневная свеча закрылась (через минуту после полуночи UTC — чтобы биржа успела её отдать)
@@ -116,7 +118,7 @@ export class Engine {
   }
   // целевые доли капитала по монетам от тренда (без учёта распределения между стратегиями)
   trendTargets(){
-    const P = this.P.trend, syms = this.coins.filter(s => this.d[s] && this.d[s].n > 120), N = this.coins.length, series = {};
+    const P = this.P.trend, syms = this.active.filter(s => this.d[s] && this.d[s].n > 120), N = this.active.length, series = {};
     for (const s of syms) series[s] = S.trendSeries(this.d[s], P);
     const ml = this.mlMult(series), out = {};
     for (const s of syms){ const i = this.d[s].n - 1, sg = series[s].sig[i], sc = series[s].scale[i], C = this.d[s].c;
@@ -124,8 +126,8 @@ export class Engine {
     return out;
   }
   mrTargets(){
-    const out = {}, N = this.coins.length;
-    for (const s of this.coins){ const o = this.st.mr[s]; out[s] = {w: o ? 1 / N : 0}; }
+    const out = {}, N = this.active.length;
+    for (const s of this.active){ const o = this.st.mr[s]; out[s] = {w: o ? 1 / N : 0}; }
     return out;
   }
   books(){
@@ -152,8 +154,11 @@ export class Engine {
     const tag = acc.real ? `«${acc.label}»: ` : '';
     const tt = this.trendTargets(), mt = this.mrTargets(), res = [], skips = [];
     // небольшой реальный счёт: капитал делится не на все монеты, а на K с самым сильным трендом (иначе доли меньше минимального ордера)
-    const K = acc.real ? Math.min(this.CFG.realTopK || 5, this.coins.length) : 0;
-    const sel = K ? S.topK(Object.entries(tt).map(([s, x]) => ({s, sig: x.sig, r30: x.r30})), K) : null;
+    const K = acc.real ? Math.min(this.CFG.realTopK || 5, this.active.length) : 0;
+    // монеты, где даже полная доля меньше минимального ордера биржи (у BTC — $50–100), в отбор не берём: место займёт следующая
+    const fits = s => { const x = tt[s], c = this.market.coins[s], min = acc.broker && acc.broker.minCost && c ? acc.broker.minCost(c.symbol) : 0;
+      return !min || eq * (A.trend || 0) * mult * risk.k * x.sig * x.scale * x.mult / K >= min; };
+    const sel = K ? S.topK(Object.entries(tt).filter(([s]) => fits(s)).map(([s, x]) => ({s, sig: x.sig, r30: x.r30})), K) : null;
     const tw = {}, mw = {};
     for (const s of this.coins){
       const x = tt[s], base = !x ? 0 : sel ? (sel.has(s) ? x.sig * x.scale * x.mult / K : 0) : x.w;
@@ -215,7 +220,7 @@ export class Engine {
   async hourly(){
     const off = this.office, P = this.P.mr, A = this.st.alloc; if (!(A.mr > 0)) return;
     const acts = [];
-    for (const s of this.coins){
+    for (const s of this.active){
       const c = this.h[s]; if (!c || c.n < P.trendMa + 5) continue;
       const ind = S.mrIndicators(c, P), i = c.n - 1, o = this.st.mr[s];
       const pos = o ? {i0: Math.max(0, S.idxAtOrBefore(c, o.t0)), entry: o.entry, stop: o.stop} : null;
@@ -242,8 +247,9 @@ export class Engine {
     }
     // 2) решения: включить или выключить по каждой монете
     if (!(A.carry > 0)) { for (const pos of pf.positions.filter(p => p.kind === 'carry')) off.closeCarry(pos, 'стратегия выключена'); return; }
-    const msgs = [], eq = off.equity(pf), slot = eq * A.carry / this.coins.length * S.carryYieldShare(P);
+    const msgs = [], eq = off.equity(pf), slot = eq * A.carry / this.active.length * S.carryYieldShare(P);
     for (const s of this.coins){
+      if (!this.active.includes(s)){ const pos = pf.positions.find(p => p.kind === 'carry' && p.sym === s); if (pos){ const c = off.closeCarry(pos, 'монета выбыла из набора'); if (c) msgs.push(`закрыл ${s}: монета выбыла из набора`); } continue; }
       const f = this.f[s]; if (!f || f.length < P.nEnter + 1) continue;
       const states = S.carryStates([...f, {t: ev + FUND, r: 0}], P), want = states[states.length - 1];
       const pos = pf.positions.find(p => p.kind === 'carry' && p.sym === s);

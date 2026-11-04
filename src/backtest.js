@@ -4,7 +4,7 @@
 import * as B from './brain.js';
 import * as S from './strategies.js';
 
-export const BT_VERSION = 4;
+export const BT_VERSION = 5;
 const DAY = 864e5, TF = {'5m': 3e5, '1h': 36e5, '1d': DAY};
 const TZ_SHIFT = 5 * 36e5; // торговый день офиса — по Ташкенту
 const LBS = [5, 10, 20, 30, 60, 90, 150, 250, 360];
