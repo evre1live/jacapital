@@ -377,21 +377,22 @@ export class Office extends EventEmitter {
   // ---------- позиции стратегий: одна чистая позиция на монету и стратегию ----------
   stratPos(strategy, sym, book = this.state.pf){ return book.positions.find(p => p.strategy === strategy && p.sym === sym && !p.closing); }
   // изменить позицию стратегии до целевого количества (со знаком); возвращает описание сделки или null
-  async adjust(strategy, sym, targetQty, ctx = {}, reason = 'ребалансировка'){
-    const st = this.state, pf = st.pf, coin = this.market.coins[sym]; if (!coin || !coin.price) return null;
-    const acc = this.acc, px = coin.price, cur = this.stratPos(strategy, sym), q = cur ? cur.qty * cur.dir : 0;
-    if (!acc.ready) return {skip: `нет связи со счётом «${acc.label}»`};
+  // id — счёт: виртуальный ведётся всегда (идёт проверка стратегий), реальный — только допущенными стратегиями
+  async adjust(strategy, sym, targetQty, ctx = {}, reason = 'ребалансировка', id = this.state.active){
+    const st = this.state, pf = st.books[id], coin = this.market.coins[sym]; if (!coin || !coin.price || !pf) return null;
+    const acc = this.accounts[id], px = coin.price, cur = this.stratPos(strategy, sym, pf), active = id === st.active;
+    if (!acc || !acc.ready) return {skip: `нет связи со счётом «${acc ? acc.label : id}»`};
     if (acc.real && !this.realAllowed(strategy)) return {skip: `стратегия ещё не допущена к реальному счёту`};
-    if (acc.real && !st.auto) return {skip: 'на реальном счёте выключены автосделки — стратегия ведёт его только с ними'};
-    if (!st.tradingOn) return {skip: 'торговля на паузе'};
+    if (acc.real && !pf.auto) return {skip: 'на реальном счёте выключены автосделки — стратегия ведёт его только с ними'};
+    if (!pf.tradingOn) return {skip: 'торговля на паузе'};
     const out = [];
     // разворот или полное закрытие
     if (cur && (targetQty === 0 || Math.sign(targetQty) !== cur.dir)){
-      const c = await this.closePosition(cur, reason); if (!c) return {skip: `не удалось закрыть ${sym}`};
+      const c = await this.closePosition(cur, reason, id); if (!c) return {skip: `не удалось закрыть ${sym}`};
       out.push({act: 'close', sym, dir: c.dir, usd: c.qty * c.exit, pnl: c.pnl});
       if (targetQty === 0) return {done: out};
     }
-    const now = this.stratPos(strategy, sym), q0 = now ? now.qty * now.dir : 0, dq = targetQty - q0;
+    const now = this.stratPos(strategy, sym, pf), q0 = now ? now.qty * now.dir : 0, dq = targetQty - q0;
     if (!dq) return {done: out};
     if (Math.abs(dq) * px < (acc.minTradeUsd || 10)) return out.length ? {done: out} : {skip: 'изменение меньше минимального ордера'};
     if (now && Math.sign(dq) !== now.dir){
@@ -428,9 +429,9 @@ export class Office extends EventEmitter {
       const pos = {id: this.ctx.id(), sym, symbol: coin.symbol, dir, qty: f.qty, entry: f.fill, sl: f.fill - dir * stop, tp: null, stop, ts: Date.now(), riskUSD: f.qty * stop, conf: Math.round((ctx.conf || 0.5) * 100), fees: f.fee, be: false, orderId: f.orderId, strategy, ctx};
       pf.positions.push(pos);
       if (acc.broker.protect){ try { const pr = await acc.broker.protectPos(pos); if (pr){ pos.protId = pr.id; pos.protPx = pr.price; } } catch (e) { this.post('aliya', null, `Не удалось поставить страховочный стоп на бирже для ${sym}: ${describeError(e)}. Позицию веду сам.`, 'system'); } }
-      this.emit('open', pos);
+      if (active) this.emit('open', pos);
     }
-    st.orders = [{ts: Date.now(), text: `${dir > 0 ? 'Купил' : 'Продал'} ${sym} ${fmtQty(f.qty, f.fill)} @ ${fmtPrice(f.fill)} · ${strategy}`}, ...st.orders].slice(0, 30);
+    if (active) st.orders = [{ts: Date.now(), text: `${dir > 0 ? 'Купил' : 'Продал'} ${sym} ${fmtQty(f.qty, f.fill)} @ ${fmtPrice(f.fill)} · ${strategy}`}, ...st.orders].slice(0, 30);
     out.push({act: now ? 'add' : 'open', sym, dir, usd: f.qty * f.fill});
     this.touch(); return {done: out};
   }

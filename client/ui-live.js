@@ -401,7 +401,7 @@ function renderStratBox(){
   const riskLine = P ? `Просадка от пика ${r ? fmtPct(-(r.dd || 0)) : '—'} · тормоз при ${Math.round(P.ddBrake * 100)}% · остановка при ${Math.round(P.ddStop * 100)}%${r && r.k < 1 ? ` · <b>${esc(r.why)}</b>` : ''}` : '';
   const ml = st.model ? `ML-фильтр включён${st.model.auc != null ? ` · качество прогноза AUC ${st.model.auc.toFixed(3).replace('.', ',')}` : ''}` : 'ML-фильтр выключен: на истории не лучше тренда без него';
   const html = `<div class="sec">Стратегии<span class="note">проверка на виртуальном: ${days} дн.</span></div>
-    <table class="tbl"><thead><tr><th>Стратегия</th><th class="num">Доля</th><th>Статус</th><th class="num">Итог</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="tbl"><thead><tr><th>Стратегия</th><th class="num">Доля</th><th>Статус</th><th class="num">Итог (вирт.)</th></tr></thead><tbody>${rows}</tbody></table>
     <p class="btnote">${riskLine}<br>${esc(ml)}${st.err ? `<br><span class="accterr">${esc(st.err)}</span>` : ''}</p>`;
   if (box._h !== html){ box._h = html; box.innerHTML = html; }
 }

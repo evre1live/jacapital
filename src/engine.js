@@ -77,13 +77,13 @@ export class Engine {
   }
 
   // ---------- риск (Джама): тормоз при просадке и предел общей позиции ----------
-  riskScale(){
-    const pf = this.office.state.pf, eq = this.office.equity(), R = this.P.risk, now = Date.now();
-    // после аварийной остановки — 14 дней без позиций, затем отсчёт просадки начинается заново, с половинным размером
-    const halt = (this.st.halt ||= {})[this.office.state.active];
-    if (halt && now - halt > 14 * DAY){ pf.peak = eq; delete this.st.halt[this.office.state.active]; }
+  riskScale(id = 'paper'){
+    const pf = this.office.state.books[id], eq = this.office.equity(pf), R = this.P.risk, now = Date.now();
+    // после аварийной остановки — 14 дней без позиций, затем отсчёт просадки начинается заново
+    const halt = (this.st.halt ||= {})[id];
+    if (halt && now - halt > 14 * DAY){ pf.peak = eq; delete this.st.halt[id]; }
     const dd = pf.peak > 0 ? 1 - eq / pf.peak : 0;
-    if (dd >= R.ddStop || this.st.halt[this.office.state.active]){ if (!this.st.halt[this.office.state.active]) this.st.halt[this.office.state.active] = now; return {k: 0, dd, why: `просадка ${pct(-dd)} от пика — сработал аварийный порог ${pct(-R.ddStop)}: позиции закрыты на 14 дней`}; }
+    if (dd >= R.ddStop || this.st.halt[id]){ if (!this.st.halt[id]) this.st.halt[id] = now; return {k: 0, dd, why: `просадка ${pct(-dd)} от пика — сработал аварийный порог ${pct(-R.ddStop)}: позиции закрыты на 14 дней`}; }
     if (dd >= R.ddBrake) return {k: 0.5, dd, why: `просадка ${pct(-dd)} от пика — размеры вдвое меньше`};
     return {k: 1, dd, why: ''};
   }
@@ -108,9 +108,19 @@ export class Engine {
     for (const s of this.coins){ const o = this.st.mr[s]; out[s] = {w: o ? 1 / N : 0}; }
     return out;
   }
-  // собрать цели всех направленных стратегий и привести позиции к ним
+  books(){
+    const off = this.office, gate = off.state.gate || {}, anyReal = Object.values(gate).some(g => g && g.real);
+    return Object.values(off.accounts).filter(a => a.ready && off.state.books[a.id] && (a.kind === 'paper' || (anyReal && a.real))).map(a => a.id);
+  }
+  // собрать цели всех направленных стратегий и привести позиции к ним — на каждом счёте, который ведёт движок
   async rebalance(why, stages){
-    const off = this.office, eq = off.equity(), A = this.st.alloc, R = this.P.risk, risk = this.riskScale();
+    const ids = this.books(); let main = null;
+    for (const id of ids){ const r = await this.rebalanceBook(why, id === 'paper' ? stages : null, id); if (id === 'paper') main = r; }
+    return main;
+  }
+  async rebalanceBook(why, stages, id){
+    const off = this.office, book = off.state.books[id], acc = off.accounts[id], eq = off.equity(book), A = this.st.alloc, R = this.P.risk, risk = this.riskScale(id);
+    const tag = acc.real ? `«${acc.label}»: ` : '';
     const tt = this.trendTargets(), mt = this.mrTargets(), res = [], skips = [];
     const tw = {}, mw = {};
     for (const s of this.coins){ tw[s] = (A.trend || 0) * (tt[s] ? tt[s].w : 0) * risk.k; mw[s] = (A.mr || 0) * (mt[s] ? mt[s].w : 0) * risk.k; }
@@ -119,19 +129,20 @@ export class Engine {
     for (const [strategy, W] of [['trend', tw], ['mr', mw]]){
       for (const s of this.coins){
         const px = this.market.coins[s] && this.market.coins[s].price; if (!px) continue;
-        const target = W[s] * cap * eq / px, cur = off.stratPos(strategy, s), q = cur ? cur.qty * cur.dir : 0;
+        const target = W[s] * cap * eq / px, cur = off.stratPos(strategy, s, book), q = cur ? cur.qty * cur.dir : 0;
         // допуск: не дёргать позицию из-за мелких изменений цели (как в бэктесте)
         const band = this.P.trend.band;
         if (target === 0 && q === 0) continue;
         if (target !== 0 && q !== 0 && Math.sign(target) === Math.sign(q) && Math.abs(target - q) <= band * Math.abs(q)) continue;
         const ctx = strategy === 'trend' ? {conf: tt[s] && tt[s].p != null ? tt[s].p : 0.5, sig: r3(tt[s] ? tt[s].sig : 0), scale: r3(tt[s] ? tt[s].scale : 0), mlP: tt[s] && tt[s].p != null ? r3(tt[s].p) : null, mult: r3(tt[s] ? tt[s].mult : 1), risk: risk.k, dd: r3(risk.dd), why}
           : {conf: 0.5, rsi: this.st.mr[s] ? this.st.mr[s].rsi : null, risk: risk.k, why};
-        const r = await off.adjust(strategy, s, target, ctx, why);
+        const r = await off.adjust(strategy, s, target, ctx, why, id);
         if (r && r.done) res.push(...r.done.map(x => ({...x, strategy})));
         else if (r && r.skip) skips.push(`${s}: ${r.skip}`);
       }
     }
-    this.view = {ts: Date.now(), trend: tt, risk, alloc: {...A}, eq};
+    if (id === 'paper') this.view = {ts: Date.now(), trend: tt, risk, alloc: {...A}, eq};
+    if (acc.real && res.length) off.post('aliya', null, `${tag}${res.map(x => `${x.act === 'close' ? 'закрыл' : x.act === 'reduce' ? 'сократил' : x.act === 'add' ? 'докупил' : 'открыл'} ${x.sym} на ${fmtUSD(x.usd)}`).join('; ')}.`, 'trade');
     if (stages){
       const moves = res.map(x => `${x.act === 'close' ? 'закрыл' : x.act === 'reduce' ? 'сократил' : x.act === 'add' ? 'докупил' : 'открыл'} ${x.dir < 0 && x.act !== 'close' && x.act !== 'reduce' ? 'шорт ' : ''}${x.sym} на ${fmtUSD(x.usd)}${x.pnl != null ? ` (${fmtUSD(x.pnl, true)})` : ''}`);
       stages.push({agent: 'aliya', say: res.length ? `Сделок: ${res.length}` : 'Позиции в норме'});
@@ -142,7 +153,7 @@ export class Engine {
 
   // ---------- дневное закрытие: тренд, ML, риск ----------
   async daily(){
-    const off = this.office, stages = [], tt = this.trendTargets(), risk = this.riskScale();
+    const off = this.office, stages = [], tt = this.trendTargets(), risk = this.riskScale('paper');
     const on = Object.entries(tt).filter(([, x]) => x.sig > 0).sort((a, b) => b[1].sig - a[1].sig);
     const fund = this.coins.map(s => [s, this.fundApr(s, 21)]).filter(([, a]) => a != null).sort((a, b) => b[1] - a[1]);
     off.post('nika', 'boris', `Дневная свеча закрыта. Тренд: ${on.length ? on.map(([s, x]) => `${s} ${x.on}/${x.of} каналов вверх`).join(', ') : 'ни одна монета не в восходящем тренде'}.` + (fund.length ? ` Фандинг за неделю: ${fund.slice(0, 3).map(([s, a]) => `${s} ${pct(a)} годовых`).join(', ')}.` : ''), 'brief');
@@ -150,9 +161,9 @@ export class Engine {
     const vols = on.slice(0, 3).map(([s, x]) => `${s} ×${num(x.scale)}`);
     off.post('boris', 'timur', `Размер по волатильности: ${vols.length ? vols.join(', ') : 'позиций нет'}. ${risk.why ? risk.why[0].toUpperCase() + risk.why.slice(1) + '.' : `Просадка от пика ${pct(-risk.dd)} — в норме.`}`, 'risk');
     stages.push({agent: 'boris', say: risk.k < 1 ? `Тормоз: ×${risk.k}` : 'Риск в норме'});
-    const A = this.st.alloc, eq = off.equity();
+    const A = this.st.alloc, eq = off.equity(off.state.books.paper);
     const tgt = on.filter(([, x]) => x.w * (A.trend || 0) * risk.k > 0).map(([s, x]) => `${s} ${pct(x.w * (A.trend || 0) * risk.k)} капитала${x.p != null ? ` (ML ${Math.round(x.p * 100)}%, ×${num(x.mult)})` : ''}`);
-    off.post('timur', 'aliya', `Цели тренда: ${tgt.length ? tgt.join(', ') : risk.k === 0 ? 'вне рынка до конца аварийной паузы' : 'вне рынка'}. Доля стратегии в капитале — ${Math.round((A.trend || 0) * 100)}% от ${fmtUSD(eq)}.`, 'signal');
+    off.post('timur', 'aliya', `Цели тренда: ${tgt.length ? tgt.join(', ') : risk.k === 0 ? 'вне рынка до конца аварийной паузы' : 'вне рынка'}. Доля стратегии в капитале — ${Math.round((A.trend || 0) * 100)}% от ${fmtUSD(eq)} (виртуальный счёт).`, 'signal');
     stages.push({agent: 'timur', say: tgt.length ? `Целей: ${tgt.length}` : 'Вне рынка'});
     await this.rebalance('дневное закрытие', stages);
     off.emit('run', {id: off.ctx.id(), ts: Date.now(), news: false, stages}); off.touch();
@@ -181,8 +192,7 @@ export class Engine {
   // ---------- фандинг: начисление и решения по арбитражу (только виртуальный счёт) ----------
   fundApr(s, n){ const f = this.f[s]; if (!f || !f.length) return null; const x = f.slice(-n); return x.reduce((a, v) => a + v.r, 0) / x.length * 1095; }
   async funding(ev){
-    const off = this.office; if (off.state.active !== 'paper') return;
-    const pf = off.state.books.paper, P = this.P.carry, A = this.st.alloc;
+    const off = this.office, pf = off.state.books.paper, P = this.P.carry, A = this.st.alloc;
     // 1) начислить фандинг за прошедшее событие по открытым позициям
     let got = 0;
     for (const pos of pf.positions.filter(p => p.kind === 'carry')){
