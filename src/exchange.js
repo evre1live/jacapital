@@ -44,7 +44,10 @@ export function makeData(CFG) {
   const only = CFG.quotes === 'binance' ? {fetchMarkets: CFG.marketType === 'swap' ? ['linear'] : ['spot']} : {};
   const ex = new ccxt[CFG.quotes]({enableRateLimit: true, timeout: 15000, options: {defaultType: CFG.marketType === 'swap' ? 'swap' : 'spot', ...only}});
   freshMarkets(ex);
-  return CFG.quotes === 'binance' ? guard(ex) : ex;
+  if (CFG.quotes !== 'binance') return ex;
+  // котировки идут через тот же прокси, что и счёт: один постоянный IP и свой лимит запросов, без соседей по Render
+  if (CFG.binance && CFG.binance.proxy) ex.httpsProxy = CFG.binance.proxy;
+  return guard(ex);
 }
 
 // Счета: виртуальный — всегда; Binance — если заданы ключи; старая настройка EXCHANGE + EXCHANGE_API_KEY (Bybit) — тоже.
@@ -70,8 +73,7 @@ export function makeAccounts(CFG, data) {
       ex = new ccxt.binance({...opts, apiKey: b.key, secret: b.secret, options: {...opts.options, adjustForTimeDifference: true, recvWindow: 10000, fetchMarkets: CFG.marketType === 'swap' ? ['linear'] : ['spot']}});
       if (b.env === 'demo') ex.enableDemoTrading(true);
       if (b.proxy) ex.httpsProxy = b.proxy;
-      if (!b.proxy) guard(ex); // через прокси у счёта свой IP и свой лимит
-      freshMarkets(ex);
+      guard(ex); freshMarkets(ex); // котировки и счёт выходят в интернет с одного IP (прямо или через прокси), лимит у них общий
     }
     acc.broker = new ExchangeBroker(ex, CFG, {name: 'Binance', live: b.env === 'live', checkKey: b.env === 'live', protect: b.env !== 'mock' && CFG.marketType === 'swap', binance: b.env !== 'mock'});
   }
