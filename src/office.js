@@ -160,6 +160,7 @@ export class Office extends EventEmitter {
       const c = {id: pos.id, sym: pos.sym, dir: pos.dir, qty: pos.qty, entry: pos.entry, exit: px, ts: pos.ts, tsClose: Date.now(), pnl: gross - pos.fees, pct: (gross - pos.fees) / (pos.entry * pos.qty), reason: 'закрыта вне офиса', conf: pos.conf};
       pf.closed.unshift(c);
       this.post('aliya', null, `${tag}Позиции ${sideRu(pos.dir)} ${pos.sym} больше нет на бирже — её закрыли вручную, сработал страховочный стоп или биржа ликвидировала. Убрал из учёта (оценка ${fmtUSD(c.pnl, true)}).`, 'system');
+      console.log(`[reconcile] ${acc.label}: позиции ${pos.sym} (${pos.strategy || 'агенты'}) нет на бирже — убрана из учёта, оценка ${c.pnl.toFixed(2)}`);
     }
     if (!adopt) { this.touch(); return; }
     for (const lp of live){
@@ -170,6 +171,7 @@ export class Office extends EventEmitter {
       pf.positions.push(pos);
       pf.cash -= lp.entry * lp.qty;
       this.post('aliya', null, `${tag}Нашёл на бирже открытую позицию ${sideRu(lp.dir)} ${c.sym} ${fmtQty(lp.qty, lp.entry)} @ ${fmtPrice(lp.entry)} — взял под контроль со стопом и тейком.`, 'trade');
+      console.log(`[reconcile] ${acc.label}: на бирже найдена позиция ${c.sym} ${lp.qty} @ ${lp.entry} — взята в учёт`);
     }
     this.touch();
   }
@@ -343,6 +345,7 @@ export class Office extends EventEmitter {
     pf.closed.unshift(c); if (pf.closed.length > 300) pf.closed.length = 300;
     if (id === this.state.active) this.state.orders = [{ts: Date.now(), text: `Закрыт ${sideRu(pos.dir)} ${pos.sym} @ ${fmtPrice(f.fill)} · ${fmtUSD(net, true)}`}, ...this.state.orders].slice(0, 30);
     this.emit('close', c); this.touch();
+    if (acc.real) console.log(`[close] ${acc.label}: ${pos.sym} (${pos.strategy || 'агенты'}) — ${reason}, ${net.toFixed(2)} USDT`);
     return c;
   }
 
@@ -496,6 +499,7 @@ export class Office extends EventEmitter {
     this.emit('pending'); this.touch();
   }
   async manualClose(id){
+    console.log(`[manual] закрытие позиции по команде из интерфейса: ${id}`);
     const pos = this.state.pf.positions.find(p => p.id === id); if (!pos) return;
     const c = await this.closePosition(pos, 'вручную');
     if (c){ this.post('aliya', null, `Закрыл вручную по вашей команде: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)} (${fmtPct(c.pct)}).`, 'trade'); this.emit('react', {agent: 'aliya', say: `Закрыл ${c.sym} по команде`, pnl: c.pnl}); }
