@@ -403,7 +403,7 @@ function renderStratBox(){
   const RA = st.real;
   const realRow = RA ? `<div class="realrow"><div class="realhead"><b>${esc(RA.label)}</b><span class="acctst ${RA.on ? 'ok' : 'off'}">${RA.on ? 'тренд торгует' : 'стратегии выключены'}</span></div>
     ${RA.on ? `<div class="realctl"><span>Размер позиций</span>${[1, 2, 3].map(k => `<button type="button" class="btn btn-sm${RA.mult === k ? ' on' : ''}" data-rmult="${k}" aria-pressed="${RA.mult === k}">×${k}</button>`).join('')}<button type="button" class="btn btn-sm btn-no" id="bRealOff">Остановить</button></div>
-    <p class="btsub">Весь капитал счёта — тренду, без плеча. ${RA.positions ? `Позиций стратегии: ${RA.positions}.` : 'Позиций пока нет: монеты без тренда или сумма ниже минимального ордера Binance.'}${RA.auto ? '' : ' <b>Включите автосделки</b> — без них стратегия реальный счёт не ведёт.'}</p>`
+    <p class="btsub">Весь капитал счёта — тренду, без плеча, в ${RA.topK || 5} монетах с самым сильным трендом из ${COINS.length}. ${RA.positions ? `Позиций стратегии: ${RA.positions}.` : 'Позиций пока нет: монеты без тренда или сумма ниже минимального ордера Binance.'}${RA.auto ? '' : ' <b>Включите автосделки</b> — без них стратегия реальный счёт не ведёт.'}</p>`
     : `<div class="realctl"><button type="button" class="btn btn-sm" id="bRealOn">Включить тренд на реальном счёте</button></div>`}</div>` : '';
   const html = `<div class="sec">Стратегии<span class="note">проверка на виртуальном: ${days} дн.</span></div>
     <table class="tbl"><thead><tr><th>Стратегия</th><th class="num">Доля</th><th>Статус</th><th class="num">Итог (вирт.)</th></tr></thead><tbody>${rows}</tbody></table>

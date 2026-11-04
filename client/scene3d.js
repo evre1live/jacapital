@@ -1047,7 +1047,8 @@ const O3 = (()=>{
     c.fillStyle = '#0c0c0e'; c.fillRect(0, 0, w, h);
     c.font = `700 30px ${FONT}`; c.fillStyle = '#c8a97e'; c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillText('РЫНОК · 24 Ч', 28, 34);
     if (!COINS.length || !S.coins) return;
-    const items = COINS.map(cn => ({sym:cn.sym, w:CAP[cn.sym] || 1.5, st:S.coins[cn.sym]})).filter(x => x.st).sort((a, b) => b.w - a.w);
+    // площадь плитки: по суточному объёму торгов (корень, чтобы BTC не занял всё), иначе — по капитализации из таблицы
+    const items = COINS.map(cn => ({sym:cn.sym, w:cn.vol ? Math.sqrt(cn.vol) : (CAP[cn.sym] || 1.5), st:S.coins[cn.sym]})).filter(x => x.st).sort((a, b) => b.w - a.w);
     const tiles = [];
     const split = (arr, x, y, ww, hh)=>{
       if (arr.length === 1){ tiles.push({...arr[0], x, y, ww, hh}); return; }
@@ -1064,10 +1065,13 @@ const O3 = (()=>{
       const base = ch >= 0 ? [31, 157, 85] : [205, 58, 58], dark = [26, 26, 28];
       const col = base.map((v, i) => Math.round(dark[i] + (v - dark[i]) * (0.35 + 0.65*k)));
       c.fillStyle = `rgb(${col.join(',')})`; c.fillRect(t.x + 3, t.y + 3, t.ww - 6, t.hh - 6);
-      const big = Math.min(t.ww, t.hh), fs = Math.max(22, Math.min(78, big * 0.3));
+      // подпись по размеру плитки: у мелких — только тикер, у совсем мелких — ничего
+      const sym = t.sym.replace(/^1000/, ''), big = Math.min(t.ww / Math.max(2.2, sym.length * 0.62), t.hh), fs = Math.min(78, big * 0.42);
+      if (fs < 13) continue;
       c.fillStyle = '#ffffff'; c.textAlign = 'center';
-      c.font = `800 ${fs}px ${FONT}`; c.fillText(t.sym, t.x + t.ww/2, t.y + t.hh/2 - fs*0.28);
-      c.font = `600 ${fs*0.46}px ${FONT}`; c.fillStyle = 'rgba(255,255,255,.88)'; c.fillText(`${ch >= 0 ? '+' : '−'}${Math.abs(ch*100).toFixed(1)}%`, t.x + t.ww/2, t.y + t.hh/2 + fs*0.42);
+      const two = t.hh > fs * 2.1;
+      c.font = `800 ${fs}px ${FONT}`; c.fillText(sym, t.x + t.ww/2, t.y + t.hh/2 - (two ? fs*0.28 : 0));
+      if (two){ c.font = `600 ${fs*0.46}px ${FONT}`; c.fillStyle = 'rgba(255,255,255,.88)'; c.fillText(`${ch >= 0 ? '+' : '−'}${Math.abs(ch*100).toFixed(1)}%`, t.x + t.ww/2, t.y + t.hh/2 + fs*0.42); }
     }
     c.textAlign = 'left'; c.textBaseline = 'alphabetic';
   }

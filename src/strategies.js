@@ -3,8 +3,10 @@
 export const DAY = 864e5, HOUR = 36e5;
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
+// колонки на SharedArrayBuffer: поток бэктеста получает их без копирования (история 25 монет за 6 лет — около 50 МБ)
+const fa = n => typeof SharedArrayBuffer !== 'undefined' ? new Float64Array(new SharedArrayBuffer(Math.max(8, n * 8))) : new Float64Array(n);
 export function toCols(arr){
-  const n = arr.length, o = {t: new Float64Array(n), o: new Float64Array(n), h: new Float64Array(n), l: new Float64Array(n), c: new Float64Array(n), n};
+  const n = arr.length, o = {t: fa(n), o: fa(n), h: fa(n), l: fa(n), c: fa(n), n};
   for (let i = 0; i < n; i++){ const k = arr[i]; o.t[i] = k.t; o.o[i] = k.o; o.h[i] = k.h; o.l[i] = k.l; o.c[i] = k.c; }
   return o;
 }
@@ -48,6 +50,9 @@ export function trendSeries(s, P = TREND_P, eps = null){
   }
   return {sig, scale};
 }
+
+// K сильнейших трендов (для небольшого счёта): монеты с включённым сигналом, по силе сигнала, при равенстве — по доходности за 30 дней
+export function topK(entries, K){ return new Set(entries.filter(e => e.sig > 0).sort((a, b) => b.sig - a.sig || b.r30 - a.r30).slice(0, K).map(e => e.s)); }
 
 // ---------- 2. Фильтр на машинном обучении (мета-разметка) поверх тренда ----------
 // Модель не угадывает цену: она оценивает, насколько вероятно, что уже включённый трендовый сигнал заработает за следующие H дней,

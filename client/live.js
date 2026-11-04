@@ -93,7 +93,7 @@ function onServer(m){
     case 'hello': {
       CFGC = m.cfg; TF_MS = m.cfg.tfMs; CANDLE_MS = TF_MS; PROFILES = m.cfg.profiles;
       SERVER_OFFSET = (m.now || Date.now()) - Date.now();
-      COINS = m.cfg.coins.map(c=>({sym:c.sym, name:c.name, dp:c.dp, qp:c.qp})); COIN = Object.fromEntries(COINS.map(c=>[c.sym,c]));
+      COINS = m.cfg.coins.map(c=>({sym:c.sym, name:c.name, dp:c.dp, qp:c.qp, vol:c.vol||0})); COIN = Object.fromEntries(COINS.map(c=>[c.sym,c]));
       S.coins = {}; applyCoins(m.coins, true);
       applyState(m.state); S.feed = m.feed || [];
       if (!S.coins[S.selected]) S.selected = COINS[0] ? COINS[0].sym : 'BTC';

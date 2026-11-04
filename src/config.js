@@ -58,7 +58,12 @@ export const CFG = {
     proxy: (env.BINANCE_PROXY || env.QUOTAGUARDSTATIC_URL || env.QUOTAGUARDSHIELD_URL || env.FIXIE_URL || '').trim(),
   },
   leverage: Math.max(1, Math.min(5, +env.LEVERAGE || 1)),
-  coins: (env.COINS || 'BTC,ETH,SOL,BNB,XRP,DOGE').split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
+  // монеты: COINS=auto (по умолчанию) — самые ликвидные фьючерсы Binance (UNIVERSE_SIZE штук), иначе список через запятую
+  coinsAuto: (!env.COINS || env.COINS.trim().toLowerCase() === 'auto') && (env.QUOTES || 'binance').toLowerCase() === 'binance',
+  coins: (env.COINS && env.COINS.trim().toLowerCase() !== 'auto' ? env.COINS : 'BTC,ETH,SOL,BNB,XRP,DOGE').split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
+  coinsFallback: ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE', 'ADA', 'LINK', 'AVAX', 'LTC', 'TRX', 'DOT', 'BCH', 'SUI', 'TON', 'NEAR', 'APT', 'ARB', 'OP', 'UNI', 'AAVE', 'ATOM', 'FIL', 'ETC', 'HBAR'],
+  universeSize: Math.max(6, Math.min(40, +env.UNIVERSE_SIZE || 25)),
+  realTopK: Math.max(1, Math.min(40, +env.REAL_TOP_K || 5)),   // небольшой реальный счёт торгует только самые сильные тренды
   timeframe: env.TIMEFRAME || '5m',
   scanSec: Math.max(20, +env.SCAN_SECONDS || 60),
   tickerSec: Math.max(2, +env.TICKER_SECONDS || 5),

@@ -419,6 +419,7 @@ html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,
 .realctl span{margin-right:2px}
 .realctl .btn.on{background:var(--accent);color:var(--accent-ink,#fff);border-color:var(--accent)}
 .realctl .btn-no{margin-left:auto}
+.watch{max-height:min(56vh,620px);overflow-y:auto;overscroll-behavior:contain;padding:2px 3px 2px 0}
 
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -625,7 +626,7 @@ function onServer(m){
     case 'hello': {
       CFGC = m.cfg; TF_MS = m.cfg.tfMs; CANDLE_MS = TF_MS; PROFILES = m.cfg.profiles;
       SERVER_OFFSET = (m.now || Date.now()) - Date.now();
-      COINS = m.cfg.coins.map(c=>({sym:c.sym, name:c.name, dp:c.dp, qp:c.qp})); COIN = Object.fromEntries(COINS.map(c=>[c.sym,c]));
+      COINS = m.cfg.coins.map(c=>({sym:c.sym, name:c.name, dp:c.dp, qp:c.qp, vol:c.vol||0})); COIN = Object.fromEntries(COINS.map(c=>[c.sym,c]));
       S.coins = {}; applyCoins(m.coins, true);
       applyState(m.state); S.feed = m.feed || [];
       if (!S.coins[S.selected]) S.selected = COINS[0] ? COINS[0].sym : 'BTC';
@@ -2806,7 +2807,8 @@ const O3 = (()=>{
     c.fillStyle = '#0c0c0e'; c.fillRect(0, 0, w, h);
     c.font = `700 30px ${FONT}`; c.fillStyle = '#c8a97e'; c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillText('РЫНОК · 24 Ч', 28, 34);
     if (!COINS.length || !S.coins) return;
-    const items = COINS.map(cn => ({sym:cn.sym, w:CAP[cn.sym] || 1.5, st:S.coins[cn.sym]})).filter(x => x.st).sort((a, b) => b.w - a.w);
+    // площадь плитки: по суточному объёму торгов (корень, чтобы BTC не занял всё), иначе — по капитализации из таблицы
+    const items = COINS.map(cn => ({sym:cn.sym, w:cn.vol ? Math.sqrt(cn.vol) : (CAP[cn.sym] || 1.5), st:S.coins[cn.sym]})).filter(x => x.st).sort((a, b) => b.w - a.w);
     const tiles = [];
     const split = (arr, x, y, ww, hh)=>{
       if (arr.length === 1){ tiles.push({...arr[0], x, y, ww, hh}); return; }
@@ -2823,10 +2825,13 @@ const O3 = (()=>{
       const base = ch >= 0 ? [31, 157, 85] : [205, 58, 58], dark = [26, 26, 28];
       const col = base.map((v, i) => Math.round(dark[i] + (v - dark[i]) * (0.35 + 0.65*k)));
       c.fillStyle = `rgb(${col.join(',')})`; c.fillRect(t.x + 3, t.y + 3, t.ww - 6, t.hh - 6);
-      const big = Math.min(t.ww, t.hh), fs = Math.max(22, Math.min(78, big * 0.3));
+      // подпись по размеру плитки: у мелких — только тикер, у совсем мелких — ничего
+      const sym = t.sym.replace(/^1000/, ''), big = Math.min(t.ww / Math.max(2.2, sym.length * 0.62), t.hh), fs = Math.min(78, big * 0.42);
+      if (fs < 13) continue;
       c.fillStyle = '#ffffff'; c.textAlign = 'center';
-      c.font = `800 ${fs}px ${FONT}`; c.fillText(t.sym, t.x + t.ww/2, t.y + t.hh/2 - fs*0.28);
-      c.font = `600 ${fs*0.46}px ${FONT}`; c.fillStyle = 'rgba(255,255,255,.88)'; c.fillText(`${ch >= 0 ? '+' : '−'}${Math.abs(ch*100).toFixed(1)}%`, t.x + t.ww/2, t.y + t.hh/2 + fs*0.42);
+      const two = t.hh > fs * 2.1;
+      c.font = `800 ${fs}px ${FONT}`; c.fillText(sym, t.x + t.ww/2, t.y + t.hh/2 - (two ? fs*0.28 : 0));
+      if (two){ c.font = `600 ${fs*0.46}px ${FONT}`; c.fillStyle = 'rgba(255,255,255,.88)'; c.fillText(`${ch >= 0 ? '+' : '−'}${Math.abs(ch*100).toFixed(1)}%`, t.x + t.ww/2, t.y + t.hh/2 + fs*0.42); }
     }
     c.textAlign = 'left'; c.textBaseline = 'alphabetic';
   }
@@ -3798,7 +3803,7 @@ function renderStratBox(){
   const RA = st.real;
   const realRow = RA ? `<div class="realrow"><div class="realhead"><b>${esc(RA.label)}</b><span class="acctst ${RA.on ? 'ok' : 'off'}">${RA.on ? 'тренд торгует' : 'стратегии выключены'}</span></div>
     ${RA.on ? `<div class="realctl"><span>Размер позиций</span>${[1, 2, 3].map(k => `<button type="button" class="btn btn-sm${RA.mult === k ? ' on' : ''}" data-rmult="${k}" aria-pressed="${RA.mult === k}">×${k}</button>`).join('')}<button type="button" class="btn btn-sm btn-no" id="bRealOff">Остановить</button></div>
-    <p class="btsub">Весь капитал счёта — тренду, без плеча. ${RA.positions ? `Позиций стратегии: ${RA.positions}.` : 'Позиций пока нет: монеты без тренда или сумма ниже минимального ордера Binance.'}${RA.auto ? '' : ' <b>Включите автосделки</b> — без них стратегия реальный счёт не ведёт.'}</p>`
+    <p class="btsub">Весь капитал счёта — тренду, без плеча, в ${RA.topK || 5} монетах с самым сильным трендом из ${COINS.length}. ${RA.positions ? `Позиций стратегии: ${RA.positions}.` : 'Позиций пока нет: монеты без тренда или сумма ниже минимального ордера Binance.'}${RA.auto ? '' : ' <b>Включите автосделки</b> — без них стратегия реальный счёт не ведёт.'}</p>`
     : `<div class="realctl"><button type="button" class="btn btn-sm" id="bRealOn">Включить тренд на реальном счёте</button></div>`}</div>` : '';
   const html = `<div class="sec">Стратегии<span class="note">проверка на виртуальном: ${days} дн.</span></div>
     <table class="tbl"><thead><tr><th>Стратегия</th><th class="num">Доля</th><th>Статус</th><th class="num">Итог (вирт.)</th></tr></thead><tbody>${rows}</tbody></table>

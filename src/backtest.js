@@ -4,7 +4,7 @@
 import * as B from './brain.js';
 import * as S from './strategies.js';
 
-export const BT_VERSION = 3;
+export const BT_VERSION = 4;
 const DAY = 864e5, TF = {'5m': 3e5, '1h': 36e5, '1d': DAY};
 const TZ_SHIFT = 5 * 36e5; // торговый день офиса — по Ташкенту
 const LBS = [5, 10, 20, 30, 60, 90, 150, 250, 360];
@@ -168,7 +168,7 @@ function walker(cols, syms, from){ const p = {}; for (const s of syms) p[s] = Ma
 function startPx(cols, syms, from){ const px = {}; for (const s of syms){ const i = S.idxAtOrBefore(cols[s], from - 1); px[s] = cols[s].c[Math.max(0, i)]; } return px; }
 
 // ---------- 1. трендовый ансамбль (+ необязательный ML-множитель) ----------
-export function simTrend(dd, {cost, from, cash = 10000, P = S.TREND_P, series = null, mult = null}){
+export function simTrend(dd, {cost, from, cash = 10000, P = S.TREND_P, series = null, mult = null, topK = 0}){
   const syms = Object.keys(dd.c).filter(s => dd.c[s].n > 120), N = syms.length, eps = [];
   const ser = series || Object.fromEntries(syms.map(s => [s, S.trendSeries(dd.c[s], P, eps)]));
   const T = timelineCols(dd.c, syms, from), at = walker(dd.c, syms, from);
@@ -179,9 +179,11 @@ export function simTrend(dd, {cost, from, cash = 10000, P = S.TREND_P, series = 
     for (const s in bar) px[s] = dd.c[s].c[bar[s]];
     for (const s of syms) fc(s, t + DAY, r => bk.fund(s, px[s], r));
     const eq = bk.equity(px);
+    // вариант «K сильнейших»: капитал делится на K, а не на все монеты
+    const sel = topK ? S.topK(Object.keys(bar).map(s => { const i = bar[s], C = dd.c[s].c; return {s, sig: ser[s].sig[i], r30: i >= 30 ? C[i] / C[i - 30] - 1 : 0}; }), topK) : null;
     for (const s in bar){
       const i = bar[s], close = px[s], m = mult ? mult[s][i] : 1;
-      const target = ser[s].sig[i] * ser[s].scale[i] * m / N * eq / close, q = bk.q[s] || 0;
+      const target = sel && !sel.has(s) ? 0 : ser[s].sig[i] * ser[s].scale[i] * m / (topK || N) * eq / close, q = bk.q[s] || 0;
       if (target === 0 && q === 0) continue;
       if (target === 0 || q === 0 || Math.sign(target) !== Math.sign(q) || Math.abs(target - q) > P.band * Math.abs(q)) bk.trade(s, target - q, close);
     }
@@ -297,7 +299,7 @@ function years(curve){
   }
   return out;
 }
-const thin = (c, n = 400) => { if (!c) return []; const k = Math.max(1, Math.ceil(c.length / n)), e0 = c[0][1]; return c.filter((_, i) => i % k === 0 || i === c.length - 1).map(([t, e]) => [t, +(e / e0).toFixed(5)]); };
+const thin = (c, n = 300) => { if (!c) return []; const k = Math.max(1, Math.ceil(c.length / n)), e0 = c[0][1]; return c.filter((_, i) => i % k === 0 || i === c.length - 1).map(([t, e]) => [t, +(e / e0).toFixed(5)]); };
 const row = (id, name, note, curve, extra = {}) => ({id, name, note, m: metrics(curve), years: years(curve), curve: thin(curve), ...extra});
 
 // ---------- загрузка истории ----------
@@ -316,12 +318,13 @@ export async function loadAll({ex, coins, symbolFor, now = Date.now(), log = () 
 }
 
 // ---------- расчёт всех стратегий (тяжёлый — в отдельном потоке) ----------
-export function computeAll(data, {coins, params: P, cost = {fee: 0.0005, slip: 0.0002}, now = Date.now()}){
+export function computeAll(data, opts){
+  const {coins, params: P, cost = {fee: 0.0005, slip: 0.0002}, now = Date.now()} = opts;
   const t0 = Date.now(), w120 = now - 120 * DAY, w365 = now - 365 * DAY;
   const {dd, d1h} = data;
   const cost2 = {fee: cost.fee * 2, slip: cost.slip * 2};
   // старая логика агентов — для сравнения, на часовых свечах за год
-  const syms1h = Object.keys(d1h.c);
+  const syms1h = Object.keys(d1h.c).filter(s => ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE'].includes(s));
   const legacy = {c: Object.fromEntries(syms1h.map(s => [s, S.fromCols(d1h.c[s], Math.max(0, S.idxAtOrBefore(d1h.c[s], w365) - 240))])), f: d1h.f};
   const a1h = simAgents(legacy, {tf: '1h', cost, P, from: w365});
   legacy.c = null;
@@ -331,6 +334,7 @@ export function computeAll(data, {coins, params: P, cost = {fee: 0.0005, slip: 0
   const tlml = simTrend(dd, {cost, from: ML_FROM, series: tl.series, mult: ml.mult});
   const tlFromMl = simTrend(dd, {cost, from: ML_FROM, series: tl.series});
   const tls = simTrend(dd, {cost, from: START, P: {...S.TREND_P, shortW: 0.5}});
+  const K = opts.topK || 5, tlk = simTrend(dd, {cost, from: START, series: tl.series, topK: K});
   const tl2 = simTrend(dd, {cost: cost2, from: START, series: tl.series});
   const carry = simCarry(dd, {from: START});
   const mr = simMR(d1h, {cost, from: START});
@@ -340,19 +344,20 @@ export function computeAll(data, {coins, params: P, cost = {fee: 0.0005, slip: 0
   const port = combine({...pick('tlml', tlml), ...pick('carry', carry), ...pick('mr', mr)}, ML_FROM);
   const port0 = combine({...pick('tl', tlFromMl), ...pick('carry', carry), ...pick('mr', mr)}, ML_FROM);
   const btcSym = coins.includes('BTC') ? 'BTC' : coins[0];
-  const btc = simHold(dd, [btcSym], START, now), ew = simHold(dd, coins, START, now);
+  const ewSyms = coins.filter(s => dd.c[s] && dd.c[s].n && dd.c[s].t[0] <= START + 7 * DAY), btc = simHold(dd, [btcSym], START, now), ew = simHold(dd, ewSyms.length ? ewSyms : coins, START, now);
   const cut = (c, f) => slice(c, f);
   const costOf = (b, eq0 = 10000) => ({fees: b.fees / eq0, slip: b.slipCost / eq0, funding: b.funding / eq0, turnover: b.turnover / eq0});
   const first = {}; for (const s of coins) first[s] = dd.c[s] && dd.c[s].n ? dd.c[s].t[0] : null;
   const R = {
     tl: (w, f) => row('tl', 'Тренд-ансамбль', 'каналы Дончиана 5–360 дней, размер по волатильности', cut(tl.curve, f), {stats: epStats(tl.eps, f, now), ...(w === 'all' ? {costs: costOf(tl.book), afterPub: metrics(cut(tl.curve, PUB))} : {})}),
+    tlk: (w, f) => row('tlk', `Тренд: ${K} сильнейших из ${Object.keys(dd.c).length}`, 'для небольшого счёта: капитал делится на K монет с самым сильным трендом', cut(tlk.curve, f), w === 'all' ? {afterPub: metrics(cut(tlk.curve, PUB))} : {}),
     tlml: (w, f) => row('tlml', 'Тренд + ML-фильтр', 'размер позиции по прогнозу модели; модель видит только прошлое', cut(tlml.curve, f), w === 'all' ? {afterPub: metrics(cut(tlml.curve, PUB))} : {}),
     carry: (w, f) => carry ? row('carry', 'Фандинг-арбитраж', 'спот + шорт фьючерса, пока фандинг выше 10% годовых; без плеча на споте, 2× на фьючерсе', cut(carry.curve, f), {stats: tradeStats(carry.trades, f, now), ...(w === 'all' ? {afterPub: metrics(cut(carry.curve, PUB))} : {})}) : null,
     mr: (w, f) => row('mr', 'Возврат к среднему (1 ч)', 'RSI-2 ниже 10 в восходящем тренде, выход над средней 5 ч', cut(mr.curve, f), {stats: tradeStats(mr.trades, f, now), ...(w === 'all' ? {costs: costOf(mr.book), afterPub: metrics(cut(mr.curve, PUB))} : {})}),
     port: (w, f) => port ? row('port', 'Портфель: тренд+ML, фандинг, возврат', 'веса обратно волатильности стратегий (не больше 50% на одну), пересчёт раз в месяц', cut(port.curve, f), w === 'all' ? {afterPub: metrics(cut(port.curve, PUB)), weights: port.weights, wids: port.ids} : {}) : null,
     port0: (w, f) => port0 ? row('port0', 'Тот же портфель без ML', '', cut(port0.curve, f), w === 'all' ? {afterPub: metrics(cut(port0.curve, PUB))} : {}) : null,
     btc: (w, f) => row('btc', 'BTC: купить и держать', '', cut(btc, f), w === 'all' ? {afterPub: metrics(cut(btc, PUB))} : {}),
-    ew: (w, f) => row('ew', '6 монет поровну: купить и держать', '', cut(ew, f), w === 'all' ? {afterPub: metrics(cut(ew, PUB))} : {}),
+    ew: (w, f) => row('ew', `${ewSyms.length} монет поровну: купить и держать`, 'монеты набора, которые торговались уже в начале 2021 года', cut(ew, f), w === 'all' ? {afterPub: metrics(cut(ew, PUB))} : {}),
   };
   const win = (id, title, from, ids, extra = []) => ({id, title, from, to: now, rows: [...extra, ...ids.map(k => R[k](id, from))].filter(Boolean)});
   return {
@@ -363,13 +368,14 @@ export function computeAll(data, {coins, params: P, cost = {fee: 0.0005, slip: 0
     mlModel: (() => { const m = finalModel(dd, tl.series, now); return m ? {...m, auc: ml.auc} : null; })(),
     // для распределения капитала: итоги стратегий с 2021 (тренд с ML — с 2022) и веса портфеля
     pick: {trend: metrics(tlml.curve), trendNoMl: metrics(tlFromMl.curve), trendNoMlAfterPub: metrics(cut(tlFromMl.curve, PUB)), carry: carry ? metrics(carry.curve) : null, mr: metrics(mr.curve), trendAfterPub: metrics(cut(tlml.curve, PUB)), carryAfterPub: carry ? metrics(cut(carry.curve, PUB)) : null, mrAfterPub: metrics(cut(mr.curve, PUB)),
+      topK: metrics(tlk.curve), topKAfterPub: metrics(cut(tlk.curve, PUB)), topKn: K,
       weights: port ? Object.fromEntries(port.ids.map((id, k) => [id === 'tlml' ? 'trend' : id, port.weights[k]])) : null},
     windows: [
-      win('w120', 'Последние 120 дней', w120, ['tl', 'tlml', 'carry', 'mr', 'port', 'btc']),
-      win('w365', 'Последние 365 дней', w365, ['tl', 'tlml', 'carry', 'mr', 'port', 'btc', 'ew'],
+      win('w120', 'Последние 120 дней', w120, ['tl', 'tlk', 'tlml', 'carry', 'mr', 'port', 'btc']),
+      win('w365', 'Последние 365 дней', w365, ['tl', 'tlk', 'tlml', 'carry', 'mr', 'port', 'btc', 'ew'],
         [row('a1h', 'Прежние агенты (1 ч)', 'логика Рустама, Аки и Нода; новости в истории недоступны', a1h.curve, {stats: tradeStats(a1h.trades, w365, now), costs: costOf(a1h.book)})]),
-      win('oos', 'С 2022 года — все прогнозы ML вне обучающей выборки', ML_FROM, ['tl', 'tlml', 'carry', 'mr', 'port', 'port0', 'btc']),
-      {id: 'all', title: 'С 2021 года', from: START, to: now, rows: [R.tl('all', START), R.tlml('all', ML_FROM), R.carry('all', START), R.mr('all', START),
+      win('oos', 'С 2022 года — все прогнозы ML вне обучающей выборки', ML_FROM, ['tl', 'tlk', 'tlml', 'carry', 'mr', 'port', 'port0', 'btc']),
+      {id: 'all', title: 'С 2021 года', from: START, to: now, rows: [R.tl('all', START), R.tlk('all', START), R.tlml('all', ML_FROM), R.carry('all', START), R.mr('all', START),
         row('mr2', 'Возврат к среднему при двойных издержках', 'проверка на устойчивость', mr2.curve), row('tl2', 'Тренд при двойных издержках', 'проверка на устойчивость', tl2.curve, {afterPub: metrics(cut(tl2.curve, PUB))}),
         row('tls', 'Тренд лонг + шорт', 'шорты с половинным весом', tls.curve, {afterPub: metrics(cut(tls.curve, PUB))}), R.port('all', ML_FROM), R.port0('all', ML_FROM), R.btc('all', START), R.ew('all', START)].filter(Boolean)},
     ],

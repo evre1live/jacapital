@@ -56,7 +56,7 @@ export class Engine {
     }
   }
   async init(){
-    try { await this.loadDaily(); await this.loadHourly(); await this.loadFunding(); this.ok = true; this.err = ''; }
+    try { await this.loadDaily(); if ((this.st.alloc.mr || 0) > 0) await this.loadHourly(); await this.loadFunding(); this.ok = true; this.err = ''; }
     catch (e) { this.err = describeError(e); console.warn('[engine] загрузка истории:', this.err); }
   }
 
@@ -83,13 +83,15 @@ export class Engine {
     try {
       if (!this.ok) await this.init();
       if (!this.ok) return;
+      // набор монет изменился (еженедельный пересчёт самых ликвидных) — сразу привести позиции к целям
+      const key = this.coins.join(','); if (this.st.coinsKey !== key){ const first = !this.st.coinsKey; this.st.coinsKey = key; this.st.kick = first ? 'набор монет расширен' : 'обновился набор монет'; }
       const now = Date.now(), last = this.st.last;
       const dayBar = Math.floor(now / DAY) * DAY - DAY, hourBar = Math.floor(now / H) * H - H, fundEv = Math.floor(now / FUND) * FUND;
       // дневная свеча закрылась (через минуту после полуночи UTC — чтобы биржа успела её отдать)
       if (last.day !== dayBar && now - (dayBar + DAY) > 60e3){ await this.loadDaily(); await this.loadFunding(); last.day = dayBar; await this.daily(); }
-      if (last.hour !== hourBar && now - (hourBar + H) > 30e3){ await this.loadHourly(); last.hour = hourBar; await this.hourly(); }
+      if (last.hour !== hourBar && now - (hourBar + H) > 30e3){ if ((this.st.alloc.mr || 0) > 0) await this.loadHourly(); last.hour = hourBar; await this.hourly(); }
       if (last.fund !== fundEv && now - fundEv > 3 * 60e3){ await this.loadFunding(); await this.funding(fundEv); last.fund = fundEv; }
-      if (this.st.kick){ this.st.kick = false; await this.rebalance('изменились настройки счёта'); this.office.touch(); }
+      if (this.st.kick){ const why = typeof this.st.kick === 'string' ? this.st.kick : 'изменились настройки счёта'; this.st.kick = false; await this.rebalance(why); this.office.touch(); }
     } catch (e) { console.error('[engine]', e); this.err = String(e.message || e); }
     finally { this.busy = false; }
   }
@@ -117,8 +119,8 @@ export class Engine {
     const P = this.P.trend, syms = this.coins.filter(s => this.d[s] && this.d[s].n > 120), N = this.coins.length, series = {};
     for (const s of syms) series[s] = S.trendSeries(this.d[s], P);
     const ml = this.mlMult(series), out = {};
-    for (const s of syms){ const i = this.d[s].n - 1, sg = series[s].sig[i], sc = series[s].scale[i];
-      out[s] = {w: sg * sc * ml[s].mult / N, sig: sg, scale: sc, p: ml[s].p, mult: ml[s].mult, on: Math.round(sg * P.lbs.length), of: P.lbs.length}; }
+    for (const s of syms){ const i = this.d[s].n - 1, sg = series[s].sig[i], sc = series[s].scale[i], C = this.d[s].c;
+      out[s] = {w: sg * sc * ml[s].mult / N, sig: sg, scale: sc, p: ml[s].p, mult: ml[s].mult, on: Math.round(sg * P.lbs.length), of: P.lbs.length, r30: i >= 30 ? C[i] / C[i - 30] - 1 : 0}; }
     return out;
   }
   mrTargets(){
@@ -149,8 +151,13 @@ export class Engine {
     const off = this.office, book = off.state.books[id], acc = off.accounts[id], eq = off.equity(book), A = this.allocFor(id), R = this.P.risk, risk = this.riskScale(id), mult = this.multFor(id);
     const tag = acc.real ? `«${acc.label}»: ` : '';
     const tt = this.trendTargets(), mt = this.mrTargets(), res = [], skips = [];
+    // небольшой реальный счёт: капитал делится не на все монеты, а на K с самым сильным трендом (иначе доли меньше минимального ордера)
+    const K = acc.real ? Math.min(this.CFG.realTopK || 5, this.coins.length) : 0;
+    const sel = K ? S.topK(Object.entries(tt).map(([s, x]) => ({s, sig: x.sig, r30: x.r30})), K) : null;
     const tw = {}, mw = {};
-    for (const s of this.coins){ tw[s] = (A.trend || 0) * (tt[s] ? tt[s].w : 0) * risk.k * mult; mw[s] = (A.mr || 0) * (mt[s] ? mt[s].w : 0) * risk.k * mult; }
+    for (const s of this.coins){
+      const x = tt[s], base = !x ? 0 : sel ? (sel.has(s) ? x.sig * x.scale * x.mult / K : 0) : x.w;
+      tw[s] = (A.trend || 0) * base * risk.k * mult; mw[s] = (A.mr || 0) * (mt[s] ? mt[s].w : 0) * risk.k * mult; }
     // предел общей позиции по направленным стратегиям
     const gross = this.coins.reduce((a, s) => a + Math.abs(tw[s]) + Math.abs(mw[s]), 0), cap = gross > R.maxGross ? R.maxGross / gross : 1;
     for (const [strategy, W] of [['trend', tw], ['mr', mw]]){
@@ -189,14 +196,15 @@ export class Engine {
     const off = this.office, stages = [], tt = this.trendTargets(), risk = this.riskScale('paper');
     const on = Object.entries(tt).filter(([, x]) => x.sig > 0).sort((a, b) => b[1].sig - a[1].sig);
     const fund = this.coins.map(s => [s, this.fundApr(s, 21)]).filter(([, a]) => a != null).sort((a, b) => b[1] - a[1]);
-    off.post('nika', 'boris', `Дневная свеча закрыта. Тренд: ${on.length ? on.map(([s, x]) => `${s} ${x.on}/${x.of} каналов вверх`).join(', ') : 'ни одна монета не в восходящем тренде'}.` + (fund.length ? ` Фандинг за неделю: ${fund.slice(0, 3).map(([s, a]) => `${s} ${pct(a)} годовых`).join(', ')}.` : ''), 'brief');
+    const more = (n, k) => n > k ? ` и ещё ${n - k}` : '';
+    off.post('nika', 'boris', `Дневная свеча закрыта. В восходящем тренде ${on.length} из ${Object.keys(tt).length} монет${on.length ? ': ' + on.slice(0, 8).map(([s, x]) => `${s} ${x.on}/${x.of}`).join(', ') + more(on.length, 8) : ''}.` + (fund.length ? ` Фандинг за неделю: ${fund.slice(0, 3).map(([s, a]) => `${s} ${pct(a)} годовых`).join(', ')}.` : ''), 'brief');
     stages.push({agent: 'nika', kind: 'scan', say: on.length ? `Тренд: ${on.slice(0, 3).map(([s]) => s).join(', ')}` : 'Трендов нет'});
     const vols = on.slice(0, 3).map(([s, x]) => `${s} ×${num(x.scale)}`);
     off.post('boris', 'timur', `Размер по волатильности: ${vols.length ? vols.join(', ') : 'позиций нет'}. ${risk.why ? risk.why[0].toUpperCase() + risk.why.slice(1) + '.' : `Просадка от пика ${pct(-risk.dd)} — в норме.`}`, 'risk');
     stages.push({agent: 'boris', say: risk.k < 1 ? `Тормоз: ×${risk.k}` : 'Риск в норме'});
     const A = this.st.alloc, eq = off.equity(off.state.books.paper);
     const tgt = on.filter(([, x]) => x.w * (A.trend || 0) * risk.k > 0).map(([s, x]) => `${s} ${pct(x.w * (A.trend || 0) * risk.k)} капитала${x.p != null ? ` (ML ${Math.round(x.p * 100)}%, ×${num(x.mult)})` : ''}`);
-    off.post('timur', 'aliya', `Цели тренда: ${tgt.length ? tgt.join(', ') : risk.k === 0 ? 'вне рынка до конца аварийной паузы' : 'вне рынка'}. Доля стратегии в капитале — ${Math.round((A.trend || 0) * 100)}% от ${fmtUSD(eq)} (виртуальный счёт).`, 'signal');
+    off.post('timur', 'aliya', `Цели тренда: ${tgt.length ? tgt.slice(0, 8).join(', ') + (tgt.length > 8 ? ` и ещё ${tgt.length - 8}` : '') : risk.k === 0 ? 'вне рынка до конца аварийной паузы' : 'вне рынка'}. Доля стратегии в капитале — ${Math.round((A.trend || 0) * 100)}% от ${fmtUSD(eq)} (виртуальный счёт).`, 'signal');
     stages.push({agent: 'timur', say: tgt.length ? `Целей: ${tgt.length}` : 'Вне рынка'});
     await this.rebalance('дневное закрытие', stages);
     off.emit('run', {id: off.ctx.id(), ts: Date.now(), news: false, stages}); off.touch();
@@ -256,7 +264,7 @@ export class Engine {
   publicView(){
     const st = this.st, tt = this.view && this.view.trend || {};
     const realAcc = Object.values(this.office.accounts).find(a => a.real && a.kind === 'exchange');
-    const real = realAcc ? {id: realAcc.id, label: realAcc.label, ready: !!realAcc.ready, on: !!(this.office.state.gate.trend && this.office.state.gate.trend.real), mult: this.multFor(realAcc.id), auto: !!(this.office.state.books[realAcc.id] || {}).auto,
+    const real = realAcc ? {id: realAcc.id, label: realAcc.label, ready: !!realAcc.ready, on: !!(this.office.state.gate.trend && this.office.state.gate.trend.real), mult: this.multFor(realAcc.id), topK: this.CFG.realTopK || 5, auto: !!(this.office.state.books[realAcc.id] || {}).auto,
       positions: ((this.office.state.books[realAcc.id] || {}).positions || []).filter(p => p.strategy).length} : null;
     return {ok: this.ok, err: this.err, real, alloc: st.alloc, params: st.params, status: st.status, gate: this.office.state.gate, since: st.since, paperPnl: this.dailyPnl(), model: st.model ? {ts: st.model.ts, n: st.model.n, auc: st.model.auc} : null,
       mr: st.mr, carry: Object.fromEntries(this.coins.map(s => [s, this.fundApr(s, 21)])), trend: Object.fromEntries(Object.entries(tt).map(([s, x]) => [s, {sig: r3(x.sig), w: r3(x.w), p: x.p != null ? r3(x.p) : null}])), risk: this.view ? this.view.risk : null, names: STRATS};

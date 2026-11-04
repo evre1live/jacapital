@@ -12,6 +12,7 @@ import ccxt from 'ccxt';
 import {loadAll, summaryLines, BT_VERSION} from './src/backtest.js';
 import {Engine, STRATS} from './src/engine.js';
 import {Reviewer} from './src/review.js';
+import {resolveUniverse, universeVolumes} from './src/universe.js';
 import {symbolFor} from './src/exchange.js';
 import {Market} from './src/market.js';
 import {News} from './src/news.js';
@@ -105,7 +106,7 @@ function broadcast(msg){ const s = JSON.stringify(msg); for (const ws of wss.cli
 function cfgPublic(){
   const acc = office ? office.acc : accounts.paper;
   return {serverIp, viaProxy, mode: acc.kind === 'paper' ? 'paper' : 'exchange', account: acc.id, real: !!acc.real, accounts: office ? office.accountsPublic() : [], quotes: CFG.quotes, marketType: CFG.marketType, venue: office ? office.venue() : '', tf: CFG.timeframe, tfMs: market.tf, tz: CFG.tz, ai: aiEnabled(), profiles: PROFILES,
-    coins: Object.values(market.coins).map(c => ({sym: c.sym, name: coinName(c.sym), dp: priceDp(c.price || c.cur?.c || 1), qp: qtyDp(c.price || 1)}))};
+    coins: (() => { const vols = universeVolumes(CFG); return Object.values(market.coins).map(c => ({sym: c.sym, name: coinName(c.sym), dp: priceDp(c.price || c.cur?.c || 1), qp: qtyDp(c.price || 1), vol: vols[c.sym] || 0})); })()};
 }
 function coinsPayload(full){
   const o = {}; for (const c of Object.values(market.coins)) o[c.sym] = {price: c.price, chg24: c.chg24, atrRef: c.atrRef, cur: c.cur, candles: full ? c.candles.slice(-240) : undefined};
@@ -205,7 +206,7 @@ async function runBacktestBg(why){
     btStatus('считаю стратегии');
     const params = {...office.state.params};
     const res = await new Promise((ok, bad) => {
-      const w = new Worker(new URL('./src/backtest-worker.js', import.meta.url), {workerData: {data: hist, opts: {coins, params, now}}});
+      const w = new Worker(new URL('./src/backtest-worker.js', import.meta.url), {workerData: {data: hist, opts: {coins, params, now, topK: CFG.realTopK}}});
       w.once('message', m => m.ok ? ok(m.res) : bad(new Error(m.error))); w.once('error', bad);
     });
     res.took = Math.round((Date.now() - t0) / 1000);
@@ -305,6 +306,7 @@ const pushState = () => { clearTimeout(stateT); stateT = setTimeout(() => broadc
 
 async function start(){
   server.listen(CFG.port, () => console.log(`JA Capital слушает порт ${CFG.port}`));
+  CFG.coins = await resolveUniverse({ex: data, CFG});
   for (let attempt = 1; ; attempt++){
     try { await market.init(); break; }
     catch (e) { market.status = {ok: false, error: describeError(e), fails: attempt}; console.error('[market] запуск:', market.status.error); broadcast({t: 'loading', status: market.status}); await new Promise(r => setTimeout(r, Math.min(60000, 5000 * attempt))); }

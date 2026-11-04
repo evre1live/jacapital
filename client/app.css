@@ -402,3 +402,4 @@ html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,
 .realctl span{margin-right:2px}
 .realctl .btn.on{background:var(--accent);color:var(--accent-ink,#fff);border-color:var(--accent)}
 .realctl .btn-no{margin-left:auto}
+.watch{max-height:min(56vh,620px);overflow-y:auto;overscroll-behavior:contain;padding:2px 3px 2px 0}

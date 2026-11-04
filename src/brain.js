@@ -13,7 +13,7 @@ export const PARAM_LIMITS = {
   riskPct: [0.25, 3], rr: [1.2, 3.5], threshold: [40, 85], maxPos: [1, 6], dailyLimit: [1, 15], rumorTrust: [0.3, 1.6], timeStop: [12, 288],
 };
 
-const COIN_NAMES = {BTC: 'Bitcoin', ETH: 'Ethereum', SOL: 'Solana', BNB: 'BNB', XRP: 'XRP', DOGE: 'Dogecoin', ADA: 'Cardano', TON: 'Toncoin', AVAX: 'Avalanche', LINK: 'Chainlink', LTC: 'Litecoin', TRX: 'TRON', DOT: 'Polkadot'};
+const COIN_NAMES = {BTC: 'Bitcoin', ETH: 'Ethereum', SOL: 'Solana', BNB: 'BNB', XRP: 'XRP', DOGE: 'Dogecoin', ADA: 'Cardano', TON: 'Toncoin', AVAX: 'Avalanche', LINK: 'Chainlink', LTC: 'Litecoin', TRX: 'TRON', DOT: 'Polkadot', BCH: 'Bitcoin Cash', SUI: 'Sui', NEAR: 'NEAR', APT: 'Aptos', ARB: 'Arbitrum', OP: 'Optimism', UNI: 'Uniswap', AAVE: 'Aave', ATOM: 'Cosmos', FIL: 'Filecoin', ETC: 'Ethereum Classic', HBAR: 'Hedera', XLM: 'Stellar', ENA: 'Ethena', WLD: 'Worldcoin', TIA: 'Celestia', SEI: 'Sei', INJ: 'Injective', ONDO: 'Ondo', PENDLE: 'Pendle', CRV: 'Curve', LDO: 'Lido', TAO: 'Bittensor', RENDER: 'Render', FET: 'Artificial Superintelligence', JUP: 'Jupiter', WIF: 'dogwifhat', '1000PEPE': 'Pepe (×1000)', '1000SHIB': 'Shiba Inu (×1000)', '1000BONK': 'Bonk (×1000)', '1000FLOKI': 'Floki (×1000)', TRUMP: 'Official Trump', HYPE: 'Hyperliquid', ZEC: 'Zcash', XMR: 'Monero', ICP: 'Internet Computer', ALGO: 'Algorand', VET: 'VeChain', SAND: 'The Sandbox', MKR: 'Maker', EIGEN: 'EigenLayer', VIRTUAL: 'Virtuals Protocol', KAITO: 'Kaito', BERA: 'Berachain', S: 'Sonic', ORDI: 'ORDI', STX: 'Stacks', IMX: 'Immutable', GALA: 'Gala', AXS: 'Axie Infinity'};
 export const coinName = s => COIN_NAMES[s] || s;
 const BETA = {BTC: 1, ETH: 1.15, SOL: 1.35, BNB: 0.85, XRP: 1.1, DOGE: 1.4};
 export const betaOf = s => BETA[s] || 1.2;
