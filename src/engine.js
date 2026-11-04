@@ -156,7 +156,7 @@ export class Engine {
     // небольшой реальный счёт: капитал делится не на все монеты, а на K с самым сильным трендом (иначе доли меньше минимального ордера)
     const K = acc.real ? Math.min(this.CFG.realTopK || 5, this.active.length) : 0;
     // монеты, где даже полная доля меньше минимального ордера биржи (у BTC — $50–100), в отбор не берём: место займёт следующая
-    const fits = s => { const x = tt[s], c = this.market.coins[s], min = acc.broker && acc.broker.minCost && c ? acc.broker.minCost(c.symbol) : 0;
+    const fits = s => { const x = tt[s], c = this.market.coins[s], min = acc.broker && acc.broker.minCost && c ? acc.broker.minCost(c.symbol, c.price) : 0;
       return !min || eq * (A.trend || 0) * mult * risk.k * x.sig * x.scale * x.mult / K >= min; };
     const sel = K ? S.topK(Object.entries(tt).filter(([s]) => fits(s)).map(([s, x]) => ({s, sig: x.sig, r30: x.r30})), K) : null;
     const tw = {}, mw = {};
@@ -183,6 +183,7 @@ export class Engine {
       }
     }
     if (id === 'paper') this.view = {ts: Date.now(), trend: tt, risk, alloc: {...A}, eq};
+    (this.st.rebal ||= {})[id] = {ts: Date.now(), why, trades: res.length, skips: skips.slice(0, 4)};
     if (acc.real){
       const moves = res.map(x => `${x.act === 'close' ? 'закрыл' : x.act === 'reduce' ? 'сократил' : x.act === 'add' ? 'докупил' : 'открыл'} ${x.dir < 0 && (x.act === 'open' || x.act === 'add') ? 'шорт ' : ''}${x.sym} на ${fmtUSD(x.usd)}`);
       if (res.length) off.post('aliya', null, `${tag}${moves.join('; ')}.`, 'trade');

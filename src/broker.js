@@ -41,7 +41,16 @@ export class ExchangeBroker {
     if (!b) throw new Error('Не удалось получить баланс счёта');
   }
   // минимальная сумма ордера на бирже (у Binance для BTC — 100 USDT, для ETH — 20, для большинства остальных — 5)
-  minCost(symbol){ try { const m = this.ex.market(symbol); return +(m && m.limits && m.limits.cost && m.limits.cost.min) || 0; } catch { return 0; } }
+  // минимальная сумма позиции: минимальный ордер биржи и минимальный лот (у UNI — 1 монета, у BNB — 0,01), с запасом 3% на движение цены
+  minCost(symbol, price = 0){
+    try {
+      const m = this.ex.market(symbol); if (!m) return 0;
+      const cost = +(m.limits && m.limits.cost && m.limits.cost.min) || 0, p = m.precision && m.precision.amount;
+      const step = p == null ? 0 : (this.ex.precisionMode === 4 ? +p : Math.pow(10, -p));   // 4 = TICK_SIZE: шаг лота задан числом
+      const lot = Math.max(+(m.limits && m.limits.amount && m.limits.amount.min) || 0, step || 0);
+      return Math.max(cost, price > 0 ? lot * price * 1.03 : 0);
+    } catch { return 0; }
+  }
   amount(symbol, qty){
     const a = +this.ex.amountToPrecision(symbol, qty);
     const m = this.ex.market(symbol);

@@ -85,6 +85,11 @@ export class Office extends EventEmitter {
         console.log('[office] тренд-стратегия допущена к реальному счёту по решению владельца, размер ×2');
       }
     }
+    // 04.11.2026: учёт минимального лота при отборе 5 монет реального счёта (UNI не открывалась: лот 1 монета) — пересобрать позиции сразу
+    if (!s.migrations.lotStepNov2026 && s.migrations.realLaunchNov2026){
+      s.migrations.lotStepNov2026 = Date.now();
+      s.strat ||= {}; s.strat.kick = 'учтён минимальный лот биржи при отборе монет';
+    }
     if (!s.migrations.paperNov2026){
       s.migrations.paperNov2026 = Date.now();
       if (this.accounts[s.active] && this.accounts[s.active].real){
@@ -408,7 +413,7 @@ export class Office extends EventEmitter {
     }
     const now = this.stratPos(strategy, sym, pf), q0 = now ? now.qty * now.dir : 0, dq = targetQty - q0;
     if (!dq) return {done: out};
-    const minOpen = Math.max(acc.minTradeUsd || 10, acc.broker && acc.broker.minCost ? acc.broker.minCost(coin.symbol) : 0);
+    const minOpen = Math.max(acc.minTradeUsd || 10, acc.broker && acc.broker.minCost ? acc.broker.minCost(coin.symbol, coin.price) : 0);
     const reducing = now && Math.sign(dq) !== now.dir;
     if (Math.abs(dq) * px < (reducing ? (acc.minTradeUsd || 10) : minOpen)) return out.length ? {done: out} : {skip: reducing ? 'изменение меньше минимального ордера' : `нужно $${(Math.abs(dq) * px).toFixed(2)}, минимальный ордер $${minOpen}`};
     if (reducing){

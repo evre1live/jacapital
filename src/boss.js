@@ -85,7 +85,10 @@ export class Boss extends EventEmitter {
     // Артур: связь со счетами, незакрытые позиции, ошибки ордеров
     for (const a of Object.values(off.accounts).filter(a => a.kind === 'exchange' && a.configured)){
       if (!a.ready) add('aliya', 'acc:' + a.id, 'bad', `«${a.label}»: нет связи — ${clip(a.error || 'причина неизвестна', 160)}`, 'восстановить связь со счётом');
-      else add('aliya', 'acc:' + a.id, 'ok', `«${a.label}»: подключён, позиций ${(st.books[a.id] || {positions: []}).positions.length}`);
+      else {
+        const rb = (eng.st.rebal || {})[a.id], tz = {timeZone: this.CFG.tz, hour: '2-digit', minute: '2-digit'}, next = Math.floor(now / DAY) * DAY + DAY + MIN;
+        add('aliya', 'acc:' + a.id, 'ok', `«${a.label}»: подключён, позиций ${(st.books[a.id] || {positions: []}).positions.length}${rb ? `; последняя ребалансировка в ${new Date(rb.ts).toLocaleTimeString('ru-RU', tz)} (сделок ${rb.trades})` : ''}; следующая — в ${new Date(next).toLocaleTimeString('ru-RU', tz)}, на закрытии дневной свечи`);
+      }
     }
     for (const b of this.books()){
       const stuck = b.book.positions.filter(p => p.closeErr > 0);
