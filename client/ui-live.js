@@ -610,7 +610,7 @@ function buildAgentPanel(){
     ? `<div class="ctl"><label for="p_${c.k}">${c.label}</label><label class="switch"><input type="checkbox" id="p_${c.k}" data-pk="${c.k}" ${S.params[c.k]?'checked':''}></label><div class="hint">${c.hint}</div></div>`
     : `<div class="ctl"><label for="p_${c.k}">${c.label}</label><output id="o_${c.k}">${c.fmt(S.params[c.k])}</output><input type="range" id="p_${c.k}" data-pk="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${S.params[c.k]}"><div class="hint">${c.hint}</div></div>`).join('');
   const quick = {nika:['Что сейчас на рынке?','Какой новости ты не доверяешь?','Какая монета самая горячая?'], boris:['Какие риски видишь?','Почему отклонил последнюю идею?','Не перегружен ли портфель?'], timur:['Почему такой сигнал?','Что нужно для сигнала по BTC?','Какой порог ты бы поставил?'], aliya:['Как дела у счёта?','Что с открытыми позициями?','Какая сделка была лучшей?']}[id];
-  const acc = {nika:'Рустама', boris:'Джаму', timur:'Нода', aliya:'Артура'}[id], ins = {nika:'Рустамом', boris:'Джамой', timur:'Нодом', aliya:'Артуром'}[id];
+  const acc = {nika:'Рустама', boris:'Аки', timur:'Нода', aliya:'Артура'}[id], ins = {nika:'Рустамом', boris:'Аки', timur:'Нодом', aliya:'Артуром'}[id];
   const ai = CFGC.ai
     ? `<div class="chat" id="chatLog"></div><div class="quick" id="quick">${quick.map(q=>`<button type="button">${esc(q)}</button>`).join('')}</div><form class="chatform" id="chatForm"><input id="chatIn" aria-label="Вопрос агенту" type="text" maxlength="400" placeholder="Спросите ${acc} о работе" autocomplete="off"><button class="btn btn-accent" type="submit" id="chatSend">Спросить</button></form>`
     : `<div class="ainote">Разговор с агентом включится, когда на сервере будет задан ANTHROPIC_API_KEY.</div>`;
@@ -641,7 +641,7 @@ function updateAgentPanel(){
 }
 function renderChat(id){
   const log = $('#chatLog'); if (!log) return; const a = AG[id];
-  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Джама. Считаю риски и режу лишнее. Спрашивайте.', timur:'Нод на связи. Могу объяснить любой сигнал и порог.', aliya:'Артур. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
+  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Аки. Считаю риски и режу лишнее. Спрашивайте.', timur:'Нод на связи. Могу объяснить любой сигнал и порог.', aliya:'Артур. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
   log.innerHTML = CHATS[id].map(m=>`<div class="bub ${m.role==='user'?'me':'ai'}${m.err?' err':''}" style="--c:${a.color}">${esc(m.content)}</div>`).join('');
 }
 function sendChat(id, text){

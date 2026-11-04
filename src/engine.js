@@ -76,7 +76,7 @@ export class Engine {
     finally { this.busy = false; }
   }
 
-  // ---------- риск (Джама): тормоз при просадке и предел общей позиции ----------
+  // ---------- риск (Аки): тормоз при просадке и предел общей позиции ----------
   riskScale(id = 'paper'){
     const pf = this.office.state.books[id], eq = this.office.equity(pf), R = this.P.risk, now = Date.now();
     // после аварийной остановки — 14 дней без позиций, затем отсчёт просадки начинается заново

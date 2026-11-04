@@ -1,4 +1,4 @@
-// Офис: состояние, конвейер Рустам → Джама → Нод → Артур, сделки по нескольким счетам, сохранение, Claude
+// Офис: состояние, конвейер Рустам → Аки → Нод → Артур, сделки по нескольким счетам, сохранение, Claude
 import fs from 'node:fs';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
@@ -9,7 +9,7 @@ const {sideRu, fmtUSD, fmtPct, fmtPrice, fmtQty, clamp} = B;
 
 const AGENTS = {
   nika:  {name: 'Рустам',  role: 'аналитик трендов и новостей', persona: 'энергичный и любопытный, всегда называет источник новости и его надёжность'},
-  boris: {name: 'Джама', role: 'риск-менеджер сделок',        persona: 'осторожный педант с сухим юмором, мыслит стопами и размером риска'},
+  boris: {name: 'Аки', role: 'риск-менеджер сделок',        persona: 'осторожный педант с сухим юмором, мыслит стопами и размером риска'},
   timur: {name: 'Нод', role: 'стратег сигналов',            persona: 'уверенный, говорит процентами уверенности и порогами'},
   aliya: {name: 'Артур',  role: 'трейдер-исполнитель',         persona: 'собранный и лаконичный, отчитывается ордерами и результатом в долларах'},
 };
@@ -510,7 +510,7 @@ export class Office extends EventEmitter {
     const clean = (Array.isArray(turns) ? turns : []).filter(t => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string' && t.content.trim()).slice(-8).map(t => ({role: t.role, content: t.content.slice(0, 1500)}));
     while (clean.length && clean[0].role !== 'user') clean.shift();
     if (!clean.length || clean[clean.length - 1].role !== 'user') throw new Error('Пустой вопрос');
-    const system = `Ты — ${a.name}, ${a.role} в офисе крипто-трейдинга JA Capital. Офис работает на реальных котировках; счёт: ${this.venue()}. Цепочка: Рустам (тренды и новости) → Джама (риски) → Нод (сигналы) → Артур (исполнение).
+    const system = `Ты — ${a.name}, ${a.role} в офисе крипто-трейдинга JA Capital. Офис работает на реальных котировках; счёт: ${this.venue()}. Цепочка: Рустам (тренды и новости) → Аки (риски) → Нод (сигналы) → Артур (исполнение).
 Твой характер: ${a.persona}.
 Отвечай по-русски, от первого лица, 1–4 коротких предложения. Опирайся только на данные ниже и называй конкретные цифры. Если данных нет — так и скажи. Не обещай доходность и не давай советов по реальным инвестициям.
 Состояние офиса (JSON): ${JSON.stringify(this.snapshot())}`;

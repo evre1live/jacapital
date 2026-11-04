@@ -67,7 +67,7 @@ function fundingCursor(funding, syms, t0){
 function timeline(c, syms, from){ const set = new Set(); for (const s of syms) for (const k of c[s]) if (k.t >= from) set.add(k.t); return [...set].sort((a, b) => a - b); }
 function pushCurve(curve, tEnd, eq){ const d = Math.floor((tEnd - 1) / DAY) * DAY; if (curve.length && curve[curve.length - 1][0] === d) curve[curve.length - 1][1] = eq; else curve.push([d, eq]); }
 
-// ---------- стратегия офиса: Рустам → Джама → Нод → Артур (как в brain.js / office.js) ----------
+// ---------- стратегия офиса: Рустам → Аки → Нод → Артур (как в brain.js / office.js) ----------
 export function simAgents(data, {tf, cost, P, from, cash = 10000}){
   const ms = TF[tf], syms = Object.keys(data.c).filter(s => data.c[s].length > 230);
   const T = timeline(data.c, syms, from);
@@ -367,7 +367,7 @@ export function computeAll(data, {coins, params: P, cost = {fee: 0.0005, slip: 0
     windows: [
       win('w120', 'Последние 120 дней', w120, ['tl', 'tlml', 'carry', 'mr', 'port', 'btc']),
       win('w365', 'Последние 365 дней', w365, ['tl', 'tlml', 'carry', 'mr', 'port', 'btc', 'ew'],
-        [row('a1h', 'Прежние агенты (1 ч)', 'логика Рустама, Джамы и Нода; новости в истории недоступны', a1h.curve, {stats: tradeStats(a1h.trades, w365, now), costs: costOf(a1h.book)})]),
+        [row('a1h', 'Прежние агенты (1 ч)', 'логика Рустама, Аки и Нода; новости в истории недоступны', a1h.curve, {stats: tradeStats(a1h.trades, w365, now), costs: costOf(a1h.book)})]),
       win('oos', 'С 2022 года — все прогнозы ML вне обучающей выборки', ML_FROM, ['tl', 'tlml', 'carry', 'mr', 'port', 'port0', 'btc']),
       {id: 'all', title: 'С 2021 года', from: START, to: now, rows: [R.tl('all', START), R.tlml('all', ML_FROM), R.carry('all', START), R.mr('all', START),
         row('mr2', 'Возврат к среднему при двойных издержках', 'проверка на устойчивость', mr2.curve), row('tl2', 'Тренд при двойных издержках', 'проверка на устойчивость', tl2.curve, {afterPub: metrics(cut(tl2.curve, PUB))}),
