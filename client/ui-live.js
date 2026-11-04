@@ -400,10 +400,21 @@ function renderStratBox(){
   const r = st.risk, P = st.params && st.params.risk;
   const riskLine = P ? `Просадка от пика ${r ? fmtPct(-(r.dd || 0)) : '—'} · тормоз при ${Math.round(P.ddBrake * 100)}% · остановка при ${Math.round(P.ddStop * 100)}%${r && r.k < 1 ? ` · <b>${esc(r.why)}</b>` : ''}` : '';
   const ml = st.model ? `ML-фильтр включён${st.model.auc != null ? ` · качество прогноза AUC ${st.model.auc.toFixed(3).replace('.', ',')}` : ''}` : 'ML-фильтр выключен: на истории не лучше тренда без него';
+  const RA = st.real;
+  const realRow = RA ? `<div class="realrow"><div class="realhead"><b>${esc(RA.label)}</b><span class="acctst ${RA.on ? 'ok' : 'off'}">${RA.on ? 'тренд торгует' : 'стратегии выключены'}</span></div>
+    ${RA.on ? `<div class="realctl"><span>Размер позиций</span>${[1, 2, 3].map(k => `<button type="button" class="btn btn-sm${RA.mult === k ? ' on' : ''}" data-rmult="${k}" aria-pressed="${RA.mult === k}">×${k}</button>`).join('')}<button type="button" class="btn btn-sm btn-no" id="bRealOff">Остановить</button></div>
+    <p class="btsub">Весь капитал счёта — тренду, без плеча. ${RA.positions ? `Позиций стратегии: ${RA.positions}.` : 'Позиций пока нет: монеты без тренда или сумма ниже минимального ордера Binance.'}${RA.auto ? '' : ' <b>Включите автосделки</b> — без них стратегия реальный счёт не ведёт.'}</p>`
+    : `<div class="realctl"><button type="button" class="btn btn-sm" id="bRealOn">Включить тренд на реальном счёте</button></div>`}</div>` : '';
   const html = `<div class="sec">Стратегии<span class="note">проверка на виртуальном: ${days} дн.</span></div>
     <table class="tbl"><thead><tr><th>Стратегия</th><th class="num">Доля</th><th>Статус</th><th class="num">Итог (вирт.)</th></tr></thead><tbody>${rows}</tbody></table>
+    ${realRow}
     <p class="btnote">${riskLine}<br>${esc(ml)}${st.err ? `<br><span class="accterr">${esc(st.err)}</span>` : ''}</p>`;
-  if (box._h !== html){ box._h = html; box.innerHTML = html; }
+  if (box._h !== html){
+    box._h = html; box.innerHTML = html;
+    box.querySelectorAll('[data-rmult]').forEach(b => b.onclick = () => wsSend({t: 'realMult', v: +b.dataset.rmult}));
+    const off = $('#bRealOff'); if (off) off.onclick = () => { if (window.confirm('Остановить стратегии на реальном счёте и закрыть их позиции?')) wsSend({t: 'realStrat', on: false}); };
+    const on = $('#bRealOn'); if (on) on.onclick = () => { if (window.confirm('Тренд-стратегия будет открывать сделки на настоящие деньги. Включить?')) wsSend({t: 'realStrat', on: true, confirm: true}); };
+  }
 }
 
 // ---------- работа над ошибками: последний разбор Claude, поправки и их проверка ----------

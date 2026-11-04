@@ -71,6 +71,19 @@ export class Office extends EventEmitter {
     }
     if (!this.accounts[s.active] || !this.accounts[s.active].configured) s.active = 'paper';
     s.gate ||= {}; s.migrations ||= {};
+    // 04.11.2026: владелец решил сразу запустить тренд-стратегию на реальном счёте (без 21 дня проверки), размер ×2
+    if (!s.migrations.realLaunchNov2026 && s.migrations.paperNov2026){
+      s.migrations.realLaunchNov2026 = Date.now();
+      const real = Object.values(this.accounts).find(a => a.real && a.kind === 'exchange');
+      if (real && s.books[real.id]){
+        s.gate.trend = {real: true, manual: true, ts: Date.now(), why: 'решение владельца'};
+        s.books[real.id].auto = true;
+        s.strat ||= {}; s.strat.realMult = {...(s.strat.realMult || {}), [real.id]: 2}; s.strat.kick = true;
+        if (s.strat.status) s.strat.status.trend = 'на реальном счёте (решение владельца)';
+        (s.feed ||= []).unshift({id: s.ids++, ts: Date.now(), from: 'system', to: null, text: `Тренд-стратегия запущена на реальном счёте «${real.label}» по решению владельца: размер ×2, без плеча, весь капитал счёта — тренду. Защита: аварийный стоп у каждой позиции, тормоз при просадке 8%, остановка при 15%. Выключить можно в «Портфеле» → «Стратегии».`, tag: 'system'});
+        console.log('[office] тренд-стратегия допущена к реальному счёту по решению владельца, размер ×2');
+      }
+    }
     if (!s.migrations.paperNov2026){
       s.migrations.paperNov2026 = Date.now();
       if (this.accounts[s.active] && this.accounts[s.active].real){
@@ -394,8 +407,10 @@ export class Office extends EventEmitter {
     }
     const now = this.stratPos(strategy, sym, pf), q0 = now ? now.qty * now.dir : 0, dq = targetQty - q0;
     if (!dq) return {done: out};
-    if (Math.abs(dq) * px < (acc.minTradeUsd || 10)) return out.length ? {done: out} : {skip: 'изменение меньше минимального ордера'};
-    if (now && Math.sign(dq) !== now.dir){
+    const minOpen = Math.max(acc.minTradeUsd || 10, acc.broker && acc.broker.minCost ? acc.broker.minCost(coin.symbol) : 0);
+    const reducing = now && Math.sign(dq) !== now.dir;
+    if (Math.abs(dq) * px < (reducing ? (acc.minTradeUsd || 10) : minOpen)) return out.length ? {done: out} : {skip: reducing ? 'изменение меньше минимального ордера' : `нужно $${(Math.abs(dq) * px).toFixed(2)}, минимальный ордер $${minOpen}`};
+    if (reducing){
       // частичное сокращение: закрываем часть и фиксируем результат этой части
       const part = {...now, qty: Math.min(Math.abs(dq), now.qty)};
       let f; try { f = await acc.broker.close(part, px); } catch (e) { this.state.stats.aliya.errors++; return {skip: `биржа не приняла сокращение ${sym}: ${e.message}`}; }
@@ -415,7 +430,7 @@ export class Office extends EventEmitter {
     if (dir < 0 && this.CFG.marketType === 'spot') return {skip: 'на споте шорт невозможен'};
     qty = Math.min(qty, acc.maxOrderUsd / px);
     if (qty * px * 1.002 > pf.cash * 0.98) qty = pf.cash * 0.98 / (px * 1.002);
-    if (qty * px < (acc.minTradeUsd || 10)) return out.length ? {done: out} : {skip: 'мало свободных средств'};
+    if (qty * px < minOpen) return out.length ? {done: out} : {skip: `мало свободных средств (нужно от $${minOpen})`};
     let f; try { f = await acc.broker.open({sym, symbol: coin.symbol, dir, qty, price: px}); }
     catch (e) { st.stats.aliya.errors++; return {skip: `биржа не приняла ордер ${sym}: ${e.message}`}; }
     pf.cash -= f.fill * f.qty + f.fee; pf.fees += f.fee; st.stats.aliya.orders++;

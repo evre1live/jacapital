@@ -60,6 +60,23 @@ export class Engine {
     catch (e) { this.err = describeError(e); console.warn('[engine] загрузка истории:', this.err); }
   }
 
+  // владелец включает или выключает стратегию на реальном счёте (без 21-дневной проверки — его решение)
+  async setReal(on, why = 'по решению владельца'){
+    const off = this.office, gate = off.state.gate;
+    if (on){ gate.trend = {real: true, manual: true, ts: Date.now(), why}; this.st.status.trend = 'на реальном счёте (решение владельца)'; }
+    else {
+      for (const k of Object.keys(gate)) if (gate[k]) gate[k] = {...gate[k], real: false, off: Date.now()};
+      this.st.status.trend = 'проверка на виртуальном счёте';
+      // закрыть позиции стратегий на реальных счетах
+      for (const a of Object.values(off.accounts).filter(a => a.real && a.ready)){
+        for (const p of off.state.books[a.id].positions.filter(p => p.strategy && !p.closing)){ const c = await off.closePosition(p, 'стратегия остановлена на реальном счёте', a.id); if (c) off.post('aliya', null, `«${a.label}»: закрыл ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)} — стратегия остановлена.`, 'trade'); }
+      }
+    }
+    off.touch(); this.kick();
+  }
+  setRealMult(id, v){ const k = Math.max(0.5, Math.min(3, +v || 1)); (this.st.realMult ||= {})[id] = k; this.office.touch(); this.kick(); return k; }
+  kick(){ this.st.kick = true; setTimeout(() => this.tick(), 500); }
+
   // ---------- расписание: вызывается раз в минуту ----------
   async tick(){
     if (this.busy) return; this.busy = true;
@@ -72,6 +89,7 @@ export class Engine {
       if (last.day !== dayBar && now - (dayBar + DAY) > 60e3){ await this.loadDaily(); await this.loadFunding(); last.day = dayBar; await this.daily(); }
       if (last.hour !== hourBar && now - (hourBar + H) > 30e3){ await this.loadHourly(); last.hour = hourBar; await this.hourly(); }
       if (last.fund !== fundEv && now - fundEv > 3 * 60e3){ await this.loadFunding(); await this.funding(fundEv); last.fund = fundEv; }
+      if (this.st.kick){ this.st.kick = false; await this.rebalance('изменились настройки счёта'); this.office.touch(); }
     } catch (e) { console.error('[engine]', e); this.err = String(e.message || e); }
     finally { this.busy = false; }
   }
@@ -118,18 +136,29 @@ export class Engine {
     for (const id of ids){ const r = await this.rebalanceBook(why, id === 'paper' ? stages : null, id); if (id === 'paper') main = r; }
     return main;
   }
+  // доли стратегий на конкретном счёте: на реальном — только допущенные и доступные (фандинг-арбитражу нужен спот), их доли растягиваются до 100%
+  allocFor(id){
+    const off = this.office, acc = off.accounts[id], A = this.st.alloc, out = {};
+    if (!acc.real) return {...A};
+    let z = 0; for (const k of Object.keys(STRATS)){ out[k] = off.realAllowed(k) && !STRATS[k].paperOnly ? (A[k] || 0) : 0; z += out[k]; }
+    if (z > 0) for (const k of Object.keys(out)) out[k] /= z;
+    return out;
+  }
+  multFor(id){ const acc = this.office.accounts[id]; return acc.real ? Math.max(0.5, Math.min(3, (this.st.realMult || {})[id] || 1)) : 1; }
   async rebalanceBook(why, stages, id){
-    const off = this.office, book = off.state.books[id], acc = off.accounts[id], eq = off.equity(book), A = this.st.alloc, R = this.P.risk, risk = this.riskScale(id);
+    const off = this.office, book = off.state.books[id], acc = off.accounts[id], eq = off.equity(book), A = this.allocFor(id), R = this.P.risk, risk = this.riskScale(id), mult = this.multFor(id);
     const tag = acc.real ? `«${acc.label}»: ` : '';
     const tt = this.trendTargets(), mt = this.mrTargets(), res = [], skips = [];
     const tw = {}, mw = {};
-    for (const s of this.coins){ tw[s] = (A.trend || 0) * (tt[s] ? tt[s].w : 0) * risk.k; mw[s] = (A.mr || 0) * (mt[s] ? mt[s].w : 0) * risk.k; }
+    for (const s of this.coins){ tw[s] = (A.trend || 0) * (tt[s] ? tt[s].w : 0) * risk.k * mult; mw[s] = (A.mr || 0) * (mt[s] ? mt[s].w : 0) * risk.k * mult; }
     // предел общей позиции по направленным стратегиям
     const gross = this.coins.reduce((a, s) => a + Math.abs(tw[s]) + Math.abs(mw[s]), 0), cap = gross > R.maxGross ? R.maxGross / gross : 1;
     for (const [strategy, W] of [['trend', tw], ['mr', mw]]){
       for (const s of this.coins){
         const px = this.market.coins[s] && this.market.coins[s].price; if (!px) continue;
         const target = W[s] * cap * eq / px, cur = off.stratPos(strategy, s, book), q = cur ? cur.qty * cur.dir : 0;
+        // на бирже позиции по монете складываются: пока висит позиция прежних агентов, стратегия эту монету не трогает
+        if (acc.kind === 'exchange' && book.positions.some(p => p.sym === s && !p.strategy && !p.closing)){ if (target) skips.push(`${s}: ждём закрытия позиции прежних агентов`); continue; }
         // допуск: не дёргать позицию из-за мелких изменений цели (как в бэктесте)
         const band = this.P.trend.band;
         if (target === 0 && q === 0) continue;
@@ -142,7 +171,11 @@ export class Engine {
       }
     }
     if (id === 'paper') this.view = {ts: Date.now(), trend: tt, risk, alloc: {...A}, eq};
-    if (acc.real && res.length) off.post('aliya', null, `${tag}${res.map(x => `${x.act === 'close' ? 'закрыл' : x.act === 'reduce' ? 'сократил' : x.act === 'add' ? 'докупил' : 'открыл'} ${x.sym} на ${fmtUSD(x.usd)}`).join('; ')}.`, 'trade');
+    if (acc.real){
+      const moves = res.map(x => `${x.act === 'close' ? 'закрыл' : x.act === 'reduce' ? 'сократил' : x.act === 'add' ? 'докупил' : 'открыл'} ${x.dir < 0 && (x.act === 'open' || x.act === 'add') ? 'шорт ' : ''}${x.sym} на ${fmtUSD(x.usd)}`);
+      if (res.length) off.post('aliya', null, `${tag}${moves.join('; ')}.`, 'trade');
+      console.log(`[engine] ${acc.label} (${why}, размер ×${mult}, капитал ${eq.toFixed(2)}): ${moves.length ? moves.join('; ') : 'без сделок'}${skips.length ? ' | пропущено: ' + skips.join('; ') : ''}`);
+    }
     if (stages){
       const moves = res.map(x => `${x.act === 'close' ? 'закрыл' : x.act === 'reduce' ? 'сократил' : x.act === 'add' ? 'докупил' : 'открыл'} ${x.dir < 0 && x.act !== 'close' && x.act !== 'reduce' ? 'шорт ' : ''}${x.sym} на ${fmtUSD(x.usd)}${x.pnl != null ? ` (${fmtUSD(x.pnl, true)})` : ''}`);
       stages.push({agent: 'aliya', say: res.length ? `Сделок: ${res.length}` : 'Позиции в норме'});
@@ -222,7 +255,10 @@ export class Engine {
   }
   publicView(){
     const st = this.st, tt = this.view && this.view.trend || {};
-    return {ok: this.ok, err: this.err, alloc: st.alloc, params: st.params, status: st.status, gate: this.office.state.gate, since: st.since, paperPnl: this.dailyPnl(), model: st.model ? {ts: st.model.ts, n: st.model.n, auc: st.model.auc} : null,
+    const realAcc = Object.values(this.office.accounts).find(a => a.real && a.kind === 'exchange');
+    const real = realAcc ? {id: realAcc.id, label: realAcc.label, ready: !!realAcc.ready, on: !!(this.office.state.gate.trend && this.office.state.gate.trend.real), mult: this.multFor(realAcc.id), auto: !!(this.office.state.books[realAcc.id] || {}).auto,
+      positions: ((this.office.state.books[realAcc.id] || {}).positions || []).filter(p => p.strategy).length} : null;
+    return {ok: this.ok, err: this.err, real, alloc: st.alloc, params: st.params, status: st.status, gate: this.office.state.gate, since: st.since, paperPnl: this.dailyPnl(), model: st.model ? {ts: st.model.ts, n: st.model.n, auc: st.model.auc} : null,
       mr: st.mr, carry: Object.fromEntries(this.coins.map(s => [s, this.fundApr(s, 21)])), trend: Object.fromEntries(Object.entries(tt).map(([s, x]) => [s, {sig: r3(x.sig), w: r3(x.w), p: x.p != null ? r3(x.p) : null}])), risk: this.view ? this.view.risk : null, names: STRATS};
   }
 }

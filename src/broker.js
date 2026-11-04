@@ -40,6 +40,8 @@ export class ExchangeBroker {
     const b = await this.balance(true);
     if (!b) throw new Error('Не удалось получить баланс счёта');
   }
+  // минимальная сумма ордера на бирже (у Binance для BTC — 100 USDT, для ETH — 20, для большинства остальных — 5)
+  minCost(symbol){ try { const m = this.ex.market(symbol); return +(m && m.limits && m.limits.cost && m.limits.cost.min) || 0; } catch { return 0; } }
   amount(symbol, qty){
     const a = +this.ex.amountToPrecision(symbol, qty);
     const m = this.ex.market(symbol);

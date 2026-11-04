@@ -26,7 +26,7 @@ export function makeAccounts(CFG, data) {
   const bOk = !problem;
   const bLabel = b.env === 'live' ? 'Binance — реальный счёт' : b.env === 'demo' ? 'Binance — демо-счёт' : 'Binance — имитация';
   const acc = {id: 'binance', kind: 'exchange', real: b.env === 'live', label: bLabel, note: `${market}, плечо ${CFG.leverage}×, ордер до $${b.maxOrderUsd}`,
-    sig: `binance:${b.env}:${CFG.marketType}`, configured: !!bOk, ready: false, maxOrderUsd: b.maxOrderUsd,
+    sig: `binance:${b.env}:${CFG.marketType}`, configured: !!bOk, ready: false, maxOrderUsd: b.maxOrderUsd, minTradeUsd: 5,
     error: bOk ? 'Подключаюсь…' : problem};
   if (bOk){
     let ex;

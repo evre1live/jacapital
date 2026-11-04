@@ -126,6 +126,21 @@ wss.on('connection', ws => {
         case 'approve': await office.approve(+m.id, !!m.ok); break;
         case 'close': await office.manualClose(+m.id); break;
         case 'reset': if (!office.resetPaper()) sendTo(ws, {t: 'toast', text: 'Сброс доступен только для виртуального счёта'}); break;
+        case 'realStrat': {
+          if (!engine) break;
+          if (m.on && m.confirm !== true){ sendTo(ws, {t: 'toast', text: 'Для реального счёта нужно подтверждение'}); break; }
+          await engine.setReal(!!m.on);
+          broadcast({t: 'toast', text: m.on ? 'Тренд-стратегия включена на реальном счёте' : 'Стратегии на реальном счёте остановлены, их позиции закрыты'});
+          office.post('system', null, m.on ? 'Тренд-стратегия включена на реальном счёте по решению владельца.' : 'Стратегии на реальном счёте остановлены по решению владельца; их позиции закрыты.', 'system');
+          break;
+        }
+        case 'realMult': {
+          if (!engine) break;
+          const id = Object.values(accounts).find(a => a.real && a.kind === 'exchange')?.id; if (!id) break;
+          const k = engine.setRealMult(id, m.v);
+          office.post('system', null, `Размер позиций на реальном счёте: ×${k}.`, 'system');
+          break;
+        }
         case 'review': {
           if (!reviewer) break;
           if (reviewer.running){ sendTo(ws, {t: 'toast', text: 'Разбор уже идёт'}); break; }
