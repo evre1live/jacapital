@@ -406,6 +406,14 @@ html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,
 .bttbl td,.bttbl th{white-space:nowrap}
 .btsub{font-size:11.5px;color:var(--muted);white-space:normal;margin-top:2px}
 
+/* стратегии и работа над ошибками */
+.revsum{font-size:13px;line-height:1.45;margin:4px 2px 6px;color:var(--text)}
+.revlist{list-style:none;margin:4px 0 6px;padding:0;display:grid;gap:7px;font-size:12.5px}
+.revlist li{line-height:1.35}
+.revlist .acctst{margin-right:4px}
+.revitem{border-top:1px solid var(--hair);padding:10px 0}
+.revitem p{margin:4px 0;font-size:13px;line-height:1.45}
+
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
@@ -632,6 +640,7 @@ function onServer(m){
     case 'react': emit('react', m); break;
     case 'toast': toast(m.text); break;
     case 'accounts': CFGC.accounts = m.accounts; S.accounts = m.accounts; emit('accounts'); break;
+    case 'review': S.review = m.review; emit('review'); break;
     case 'backtest': S.bt = m.bt; if (m.bt.res && m.bt.res.windows) S.btRes = m.bt.res; emit('backtest'); break;
     case 'chat': { const cb = REQ[m.reqId]; if (cb){ delete REQ[m.reqId]; cb(m); } break; }
     case 'meetStart': emit('meetStart'); break;
@@ -3406,6 +3415,7 @@ function bootLive(){
   on('feed', m=>{ if (uiReady) addFeedItem(m, true); });
   on('status', renderStatus); on('conn', renderStatus);
   on('backtest', renderBtBox);
+  on('review', renderRevBox); on('state', ()=>{ if (activeTab==='port') renderStratBox(); });
   on('accounts', ()=>{ renderAccounts(); renderAcctBox(); }); on('hello', renderAccounts); on('state', ()=>{ if (S.account && S.account.id !== shownAccount) renderAccounts(); renderAcctBox(); });
   on('meetStart', ()=>{ if (!MEET.active){ gatherMeeting(); for (const a of AG_LIST) say(a, '…', 60); } updateMeetBtn(); });
   on('meeting', async m=>{
@@ -3603,7 +3613,7 @@ function updateChartHead(){
   const ch = $('#cCh'); ch.textContent = `${fmtPct(it.chg24)} за 24 ч`; ch.className = 'mono '+(it.chg24>=0?'up':'down');
   const chips = [`<span class="pill">RSI ${it.rsi.toFixed(0)}</span>`, `<span class="pill">Волат. ${(it.atrPct*100).toFixed(2)}%</span>`];
   if (b){ chips.push(`<span class="pill ${b.label==='рост'?'up':b.label==='падение'?'down':''}">Тренд: ${b.label}</span>`); chips.push(`<span class="pill ${b.sent>0.2?'up':b.sent<-0.2?'down':''}">Новости ${b.sent>=0?'+':'−'}${Math.abs(b.sent).toFixed(2)}</span>`); }
-  const pos = S.pf.positions.find(p=>p.sym===sym);
+  const pos = S.pf.positions.find(p=>p.sym===sym && p.kind!=='carry');
   if (pos){ const u = upnl(pos); chips.push(`<span class="pill ${u>=0?'up':'down'}">${sideRu(pos.dir)} ${fmtUSD(u,true)}</span>`); }
   const html = chips.join(''); if ($('#cChips').innerHTML !== html) $('#cChips').innerHTML = html;
 }
@@ -3630,8 +3640,8 @@ function drawChart(){
   let hi = -Infinity, lo = Infinity;
   for (const k of cs){ hi = Math.max(hi,k.h); lo = Math.min(lo,k.l); }
   for (const v of e9.concat(e21)){ hi = Math.max(hi,v); lo = Math.min(lo,v); }
-  const pos = S.pf.positions.find(p=>p.sym===sym);
-  if (pos) for (const v of [pos.sl,pos.tp,pos.entry]){ hi = Math.max(hi,v); lo = Math.min(lo,v); }
+  const pos = S.pf.positions.find(p=>p.sym===sym && p.kind!=='carry');
+  if (pos) for (const v of (pos.strategy ? [pos.entry] : [pos.sl,pos.tp,pos.entry])){ if (v == null) continue; hi = Math.max(hi,v); lo = Math.min(lo,v); }
   const padv = (hi-lo)*0.06 || hi*0.001; hi += padv; lo -= padv;
   const step = plotW / N;
   const X = i => pL + i*step + step/2, Y = v => pT + (1-(v-lo)/(hi-lo))*priceH;
@@ -3659,7 +3669,8 @@ function drawChart(){
   lineS(e21.slice(-n), CSS.ema21); lineS(e9.slice(-n), CSS.ema9);
   if (pos){
     const lvl = (v, col, label)=>{ const yy = Math.round(Y(v))+0.5; x.setLineDash([4,3]); x.strokeStyle = col; x.lineWidth = 1; x.beginPath(); x.moveTo(pL, yy); x.lineTo(pL+plotW, yy); x.stroke(); x.setLineDash([]); x.font = `600 10.5px ${font}`; x.textAlign='right'; x.textBaseline='bottom'; x.fillStyle = col; x.fillText(label, pL+plotW-4, yy-2); };
-    lvl(pos.tp, CSS.up, `Тейк ${axisFmt(sym,pos.tp)}`); lvl(pos.sl, CSS.down, `Стоп ${axisFmt(sym,pos.sl)}`); lvl(pos.entry, CSS.muted, `Вход ${sideRu(pos.dir)}`);
+    if (!pos.strategy){ lvl(pos.tp, CSS.up, `Тейк ${axisFmt(sym,pos.tp)}`); lvl(pos.sl, CSS.down, `Стоп ${axisFmt(sym,pos.sl)}`); }
+    lvl(pos.entry, CSS.muted, `Вход ${sideRu(pos.dir)}${pos.strategy ? ' · ' + (STRAT_SHORT[pos.strategy] || '') : ''}`);
   }
   const marks = [];
   for (const c of S.pf.closed){ if (c.sym!==sym) continue; if (c.tsClose < firstT) continue; marks.push({i:iOf(c.ts), v:c.entry, dir:c.dir, kind:'in'}); marks.push({i:iOf(c.tsClose), v:c.exit, dir:c.dir, kind:'out', win:c.pnl>0}); }
@@ -3764,6 +3775,68 @@ function openBtReport(){
   m.hidden = false; $('#btClose').focus();
 }
 
+// ---------- стратегии: доли капитала, статус, результат на виртуальном счёте ----------
+const STRAT_SHORT = {trend: 'тренд', carry: 'фандинг', mr: 'возврат', legacy: 'прежние агенты'};
+function renderStratBox(){
+  const box = $('#stratBox'); if (!box) return;
+  const st = S.strat; if (!st){ box.innerHTML = ''; box._h = ''; return; }
+  const names = st.names || {}, days = Math.max(0, Math.floor((nowMs() - st.since) / 864e5));
+  const rows = ['trend', 'carry', 'mr'].map(k => {
+    const a = (st.alloc && st.alloc[k]) || 0, pnl = st.paperPnl ? st.paperPnl[k] : null, status = (st.status && st.status[k]) || '—';
+    const cls = /допущена/.test(status) ? 'ok' : /выключена/.test(status) ? 'bad' : 'off';
+    return `<tr><td><b>${esc((names[k] && names[k].name) || k)}</b>${k === 'carry' ? '<div class="btsub">только виртуальный счёт: нужен спот</div>' : ''}</td><td class="num">${Math.round(a * 100)}%</td><td><span class="acctst ${cls}">${esc(status.replace('выключена: ', 'выкл.: '))}</span></td><td class="num ${pnl == null ? '' : pnl < 0 ? 'down' : 'up'}">${pnl != null ? fmtUSD(pnl, true) : '—'}</td></tr>`;
+  }).join('');
+  const r = st.risk, P = st.params && st.params.risk;
+  const riskLine = P ? `Просадка от пика ${r ? fmtPct(-(r.dd || 0)) : '—'} · тормоз при ${Math.round(P.ddBrake * 100)}% · остановка при ${Math.round(P.ddStop * 100)}%${r && r.k < 1 ? ` · <b>${esc(r.why)}</b>` : ''}` : '';
+  const ml = st.model ? `ML-фильтр включён${st.model.auc != null ? ` · качество прогноза AUC ${st.model.auc.toFixed(3).replace('.', ',')}` : ''}` : 'ML-фильтр выключен: на истории не лучше тренда без него';
+  const html = `<div class="sec">Стратегии<span class="note">проверка на виртуальном: ${days} дн.</span></div>
+    <table class="tbl"><thead><tr><th>Стратегия</th><th class="num">Доля</th><th>Статус</th><th class="num">Итог</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="btnote">${riskLine}<br>${esc(ml)}${st.err ? `<br><span class="accterr">${esc(st.err)}</span>` : ''}</p>`;
+  if (box._h !== html){ box._h = html; box.innerHTML = html; }
+}
+
+// ---------- работа над ошибками: последний разбор Claude, поправки и их проверка ----------
+const VERDICT = {applied: ['ok', 'принята'], rejected: ['off', 'отклонена'], confirmed: ['ok', 'подтверждена'], rolled_back: ['bad', 'откат']};
+function revDate(ts){ return new Date(ts).toLocaleString('ru-RU', {day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'}); }
+function renderRevBox(){
+  const box = $('#revBox'); if (!box) return;
+  const R = S.review || {}, last = (R.reviews || [])[0];
+  let body = '';
+  if (R.running) body = `<p class="btnote">Идёт разбор: ${esc(R.text || '…')}</p>`;
+  if (last && last.error) body += `<p class="accterr">Последний разбор не удался: ${esc(last.error)}</p>`;
+  else if (last){
+    body += `<p class="revsum">${esc(last.summary || '')}</p>`;
+    if (last.mistakes && last.mistakes.length) body += `<ul class="revlist">${last.mistakes.slice(0, 3).map(m => `<li><b>${esc(m.title)}</b>${m.cost != null ? ` <span class="down">${esc(fmtUSD(-Math.abs(m.cost)))}</span>` : ''}<div class="btsub">${esc(m.lesson)}</div></li>`).join('')}</ul>`;
+    if (last.proposals && last.proposals.length) body += `<ul class="revlist">${last.proposals.map(p => `<li><span class="acctst ${VERDICT[p.verdict] ? VERDICT[p.verdict][0] : 'off'}">${VERDICT[p.verdict] ? VERDICT[p.verdict][1] : esc(p.verdict)}</span> ${esc(p.name)}: ${esc(String(p.from ?? '—'))} → ${esc(String(p.value))}<div class="btsub">${esc(p.verdictWhy || '')}</div></li>`).join('')}</ul>`;
+    else body += `<p class="btnote">Поправок нет.</p>`;
+    body += `<p class="btnote">${revDate(last.ts)} · ${esc(last.model || '')}</p>`;
+  } else if (!R.running) body += `<p class="btnote">${R.ai === false ? 'Нужен ключ ANTHROPIC_API_KEY в настройках сервера.' : 'Первый разбор появится после запуска или в 09:30 по Ташкенту.'}</p>`;
+  const html = `<div class="sec">Работа над ошибками<span class="note">Claude, каждый день</span></div>${body}<div class="btact"><button type="button" class="btn btn-sm" id="bRevRun"${R.running || R.ai === false ? ' disabled' : ''}>${R.running ? 'Разбираю…' : 'Разобрать сейчас'}</button>${(R.reviews && R.reviews.length) || (R.changes && R.changes.length) ? '<button type="button" class="btn btn-sm" id="bRevLog">Журнал</button>' : ''}</div>`;
+  if (box._h === html) return; box._h = html; box.innerHTML = html;
+  const b = $('#bRevRun'); if (b) b.onclick = () => wsSend({t: 'review'});
+  const l = $('#bRevLog'); if (l) l.onclick = openJournal;
+}
+function openJournal(){
+  const R = S.review || {};
+  let m = $('#revModal');
+  if (!m){ m = document.createElement('div'); m.className = 'modal'; m.id = 'revModal'; m.hidden = true; document.body.appendChild(m); }
+  const pct = x => x == null ? '—' : btPct(x);
+  const ch = (R.changes || []).map(c => `<tr><td class="mono" style="white-space:nowrap">${new Date(c.ts).toLocaleDateString('ru-RU')}</td><td>${esc(c.name)}<div class="btsub">${esc(STRAT_SHORT[c.strategy] || c.strategy)} · ${esc(c.why || '')}</div></td><td class="num">${esc(String(c.from))} → ${esc(String(c.to))}</td>
+    <td><span class="acctst ${VERDICT[c.status] ? VERDICT[c.status][0] : 'off'}">${VERDICT[c.status] ? VERDICT[c.status][1] : esc(c.status)}</span><div class="btsub">${esc(c.verdictWhy || '')}</div>${c.forward ? `<div class="btsub">после применения: ${pct(c.forward.cand && c.forward.cand.total)} против ${pct(c.forward.base && c.forward.base.total)}</div>` : ''}</td>
+    <td class="num">${(c.report || []).map(w => `${esc(w.title)}: ${w.base ? btNum(w.base.sharpe) : '—'} → ${w.cand ? btNum(w.cand.sharpe) : '—'}`).join('<br>')}</td></tr>`).join('');
+  const rv = (R.reviews || []).map(r => `<div class="revitem"><b>${revDate(r.ts)}</b>${r.error ? `<p class="accterr">${esc(r.error)}</p>` : `<p>${esc(r.summary || '')}</p>${(r.mistakes || []).length ? `<ul class="revlist">${r.mistakes.map(x => `<li><b>${esc(x.title)}</b>${x.cost != null ? ` <span class="down">${esc(fmtUSD(-Math.abs(x.cost)))}</span>` : ''}<div class="btsub">${esc(x.evidence)}</div><div class="btsub">Урок: ${esc(x.lesson)}</div></li>`).join('')}</ul>` : ''}${(r.watch || []).length ? `<p class="btsub">Отслеживать: ${r.watch.map(esc).join('; ')}</p>` : ''}`}</div>`).join('');
+  m.innerHTML = `<div class="mbox btbox" role="dialog" aria-modal="true" aria-labelledby="revTitle"><div class="bthead"><h3 id="revTitle">Журнал работы над ошибками</h3><button type="button" class="btn btn-sm" id="revClose">Закрыть</button></div>
+    <p>Каждый день Claude разбирает сделки и предлагает поправки параметров. Поправка применяется, только если на истории с 2021 года и за последний год или 90 дней она лучше прежней настройки; через 14 дней её перепроверяют на новых данных и откатывают, если она оказалась хуже.</p>
+    <h4>Поправки</h4>${ch ? `<div class="btscroll"><table class="tbl bttbl"><thead><tr><th>Дата</th><th>Параметр</th><th class="num">Было → стало</th><th>Решение</th><th class="num">Шарп: было → стало</th></tr></thead><tbody>${ch}</tbody></table></div>` : '<p class="btnote">Поправок пока не было.</p>'}
+    <h4>Разборы</h4>${rv || '<p class="btnote">Разборов пока не было.</p>'}</div>`;
+  const close = () => { m.hidden = true; document.removeEventListener('keydown', onKey); };
+  const onKey = ev => { if (ev.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  m.onclick = ev => { if (ev.target === m) close(); };
+  $('#revClose').onclick = close;
+  m.hidden = false; $('#revClose').focus();
+}
+
 // подключение счетов: статус, причина ошибки, повторная проверка
 function renderAcctBox(){
   const box = $('#acctBox'); if (!box) return;
@@ -3785,9 +3858,9 @@ function renderPortfolio(full){
       <div id="pendBox"></div>
       <div class="sec">Открытые позиции</div><div id="posBox"></div>
       <div class="sec">История сделок<span class="note" id="histNote"></span></div><div id="histBox"></div>
-      <div id="btBox"></div>
+      <div id="stratBox"></div><div id="revBox"></div><div id="btBox"></div>
       ${paper ? `<div class="resetbox"><button type="button" class="btn btn-sm" id="bReset">Начать заново</button><span id="resetNote">Сбросит виртуальный счёт и историю.</span></div>` : ''}`;
-    portBuilt = true; EQ.sized = false; $('#posBox')._k = null; renderBtBox();
+    portBuilt = true; EQ.sized = false; $('#posBox')._k = null; renderBtBox(); renderStratBox(); renderRevBox();
     const box = $('#eqbox');
     box.addEventListener('pointermove', e=>{ const r = box.getBoundingClientRect(); EQ.hover = {x:e.clientX-r.left, y:e.clientY-r.top}; drawEquity(); });
     box.addEventListener('pointerleave', ()=>{ EQ.hover = null; drawEquity(); });
@@ -3813,22 +3886,24 @@ function renderPortfolio(full){
   const posKey = pf.positions.map(p=>p.id).join(','); const posBox = $('#posBox');
   if (posBox._k !== posKey){
     posBox._k = posKey;
-    posBox.innerHTML = pf.positions.length ? `<table class="tbl"><thead><tr><th>Монета</th><th class="num">Вход → сейчас</th><th class="num">P&L</th><th></th></tr></thead><tbody>${pf.positions.map(p=>
+    posBox.innerHTML = pf.positions.length ? `<table class="tbl"><thead><tr><th>Монета</th><th class="num">Вход → сейчас</th><th class="num">P&L</th><th></th></tr></thead><tbody>${pf.positions.map(p=> p.kind==='carry' ?
+      `<tr data-pid="${p.id}"><td><b class="mono">${p.sym}</b> <span class="side-pill l">СПОТ</span><span class="side-pill s">ШОРТ</span><br><small style="color:var(--faint)">фандинг-арбитраж · ${esc(fmtUSD(p.notional))}</small></td><td class="num"><small style="color:var(--faint)">заморожено</small><br>${esc(fmtUSD(p.entry))}</td><td class="num ${p.funding-p.fees>=0?'up':'down'}">${fmtUSD(p.funding-p.fees,true)}<br><small>фандинг ${fmtUSD(p.funding,true)}</small></td><td></td></tr>` :
       `<tr data-pid="${p.id}"><td><b class="mono">${p.sym}</b> <span class="side-pill ${p.dir>0?'l':'s'}">${sideRu(p.dir)}</span><br><small style="color:var(--faint)" data-f="lv"></small></td>
       <td class="num">${esc(fmtPrice(p.sym,p.entry))}<br><small style="color:var(--faint)" data-f="px"></small></td><td class="num" data-f="pnl"></td>
       <td class="num"><button type="button" class="btn btn-sm" data-close="${p.id}" aria-label="Закрыть ${sideRu(p.dir)} ${p.sym}">Закрыть</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">Открытых позиций нет. Артур ждёт сигнал от Нода.</div>`;
   }
   for (const p of pf.positions){
+    if (p.kind === 'carry') continue;
     const tr = posBox.querySelector(`[data-pid="${p.id}"]`); if (!tr) continue;
     const u = upnl(p), px = S.coins[p.sym] ? S.coins[p.sym].price : p.entry;
-    tr.querySelector('[data-f=lv]').textContent = `стоп ${fmtPrice(p.sym,p.sl)}${p.be?' · б/у':''} · тейк ${fmtPrice(p.sym,p.tp)}`;
+    tr.querySelector('[data-f=lv]').textContent = p.strategy ? `${STRAT_SHORT[p.strategy] || p.strategy} · аварийный стоп ${p.sl != null ? fmtPrice(p.sym,p.sl) : '—'}` : `стоп ${fmtPrice(p.sym,p.sl)}${p.be?' · б/у':''} · тейк ${fmtPrice(p.sym,p.tp)}`;
     tr.querySelector('[data-f=px]').textContent = fmtPrice(p.sym, px);
     const c = tr.querySelector('[data-f=pnl]'); c.className = 'num '+(u>=0?'up':'down'); c.innerHTML = `${fmtUSD(u,true)}<br><small>${fmtPct(u/(p.entry*p.qty))}</small>`;
   }
   const cl = pf.closed; const hist = cl.slice(0, 30);
   $('#histNote').textContent = pf.closedCount ? `последние ${hist.length} из ${pf.closedCount}` : '';
   const hb = $('#histBox'); const hk = (pf.closedCount||0)+':'+(cl[0]&&cl[0].id);
-  if (hb._k !== hk){ hb._k = hk; hb.innerHTML = hist.length ? `<table class="tbl"><thead><tr><th>Время</th><th>Сделка</th><th class="num">P&L</th></tr></thead><tbody>${hist.map(c=>`<tr><td class="mono" style="color:var(--faint);white-space:nowrap">${fmtTime(c.tsClose)}</td><td><b class="mono">${c.sym}</b> <span class="side-pill ${c.dir>0?'l':'s'}">${sideRu(c.dir)}</span> <small style="color:var(--faint)">${esc(c.reason)}</small></td><td class="num ${c.pnl>=0?'up':'down'}">${fmtUSD(c.pnl,true)}</td></tr>`).join('')}</tbody></table>` : `<div class="empty">Сделок пока нет.</div>`; }
+  if (hb._k !== hk){ hb._k = hk; hb.innerHTML = hist.length ? `<table class="tbl"><thead><tr><th>Время</th><th>Сделка</th><th class="num">P&L</th></tr></thead><tbody>${hist.map(c=>`<tr><td class="mono" style="color:var(--faint);white-space:nowrap">${fmtTime(c.tsClose)}</td><td><b class="mono">${c.sym}</b> ${c.kind==='carry' ? '<span class="side-pill l">СПОТ+ШОРТ</span>' : `<span class="side-pill ${c.dir>0?'l':'s'}">${sideRu(c.dir)}</span>`} <small style="color:var(--faint)">${esc((c.strategy && STRAT_SHORT[c.strategy] ? STRAT_SHORT[c.strategy] + ' · ' : '') + c.reason)}</small></td><td class="num ${c.pnl>=0?'up':'down'}">${fmtUSD(c.pnl,true)}</td></tr>`).join('')}</tbody></table>` : `<div class="empty">Сделок пока нет.</div>`; }
   drawEquity();
 }
 function pendRow(p, exp){

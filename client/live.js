@@ -114,6 +114,7 @@ function onServer(m){
     case 'react': emit('react', m); break;
     case 'toast': toast(m.text); break;
     case 'accounts': CFGC.accounts = m.accounts; S.accounts = m.accounts; emit('accounts'); break;
+    case 'review': S.review = m.review; emit('review'); break;
     case 'backtest': S.bt = m.bt; if (m.bt.res && m.bt.res.windows) S.btRes = m.bt.res; emit('backtest'); break;
     case 'chat': { const cb = REQ[m.reqId]; if (cb){ delete REQ[m.reqId]; cb(m); } break; }
     case 'meetStart': emit('meetStart'); break;

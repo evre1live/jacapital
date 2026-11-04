@@ -67,6 +67,7 @@ export const CFG = {
   anthropicKey: env.ANTHROPIC_API_KEY || '',
   model: env.CLAUDE_MODEL || 'claude-sonnet-5-5',
   modelFast: env.CLAUDE_MODEL_FAST || 'claude-haiku-5-5',
+  modelReview: env.CLAUDE_MODEL_REVIEW || env.CLAUDE_MODEL || 'claude-opus-5-5',   // ежедневный разбор сделок: раз в день, нужна лучшая модель
   dataDir: path.resolve(env.DATA_DIR || './data'),
   tz: env.OFFICE_TZ || 'Asia/Tashkent',
   paperCash: +env.PAPER_START_CASH || 10000,

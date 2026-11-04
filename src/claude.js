@@ -1,8 +1,8 @@
 // Обращения к Claude API (ANTHROPIC_API_KEY): разбор новостей, планёрка, разговор с агентами
 import {CFG} from './config.js';
 
-const LIMITS = {chat: 40, meeting: 8, news: 30}; // запросов в час
-const used = {chat: [], meeting: [], news: []};
+const LIMITS = {chat: 40, meeting: 8, news: 30, review: 6}; // запросов в час
+const used = {chat: [], meeting: [], news: [], review: []};
 export const aiEnabled = () => !!CFG.anthropicKey;
 
 function take(kind){
@@ -12,15 +12,15 @@ function take(kind){
   arr.push(now);
 }
 
-export async function ask({system, messages, prompt, fast = false, maxTokens = 700, kind = 'chat'}){
+export async function ask({system, messages, prompt, fast = false, model = null, maxTokens = 700, kind = 'chat'}){
   if (!aiEnabled()) { const e = new Error('Не задан ANTHROPIC_API_KEY'); e.code = 'no_key'; throw e; }
   take(kind);
-  const body = {model: fast ? CFG.modelFast : CFG.model, max_tokens: maxTokens, messages: messages || [{role: 'user', content: prompt}]};
+  const body = {model: model || (fast ? CFG.modelFast : CFG.model), max_tokens: maxTokens, messages: messages || [{role: 'user', content: prompt}]};
   if (system) body.system = system;
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {'x-api-key': CFG.anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json'},
-    body: JSON.stringify(body), signal: AbortSignal.timeout(90000),
+    body: JSON.stringify(body), signal: AbortSignal.timeout(kind === 'review' ? 240000 : 90000),
   });
   const txt = await r.text();
   if (!r.ok){

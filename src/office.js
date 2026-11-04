@@ -202,6 +202,7 @@ export class Office extends EventEmitter {
       const top = brief.hot[0] ? brief.items.find(i => i.sym === brief.hot[0]) : null;
       stages.push({agent: 'nika', kind: focus ? 'news' : 'scan', pre: focus ? (focus.coins && focus.coins.length ? `Новость по ${focus.coins[0]}!` : 'Новость по рынку!') : null,
         say: top ? `Сводка: ${top.sym} ${top.score > 0 ? '▲' : '▼'}${Math.abs(top.score).toFixed(2)}` : 'Сводка: тихо'});
+      if (!this.legacyOn()){ stages.push({agent: 'nika', say: top ? `${top.sym} ${top.score > 0 ? '▲' : '▼'}${Math.abs(top.score).toFixed(2)} — для сводки` : 'Рынок спокоен', end: true}); return this.finishRun(stages, focus); }
       const evals = B.borisEvaluate(this.ctx, brief);
       if (!evals.length && !st.pf.positions.length){ stages.push({agent: 'boris', say: 'Идей нет, ждём', end: true}); return this.finishRun(stages, focus); }
       if (evals.length) this.post('boris', 'timur', B.borisText(evals), 'risk');
@@ -319,7 +320,7 @@ export class Office extends EventEmitter {
     pf.cash += pos.entry * pos.qty + gross - f.fee; pf.fees += f.fee;
     pf.positions = pf.positions.filter(x => x !== pos);
     const net = gross - f.fee - pos.fees;
-    const c = {id: pos.id, sym: pos.sym, dir: pos.dir, qty: pos.qty, entry: pos.entry, exit: f.fill, ts: pos.ts, tsClose: Date.now(), pnl: net, pct: net / (pos.entry * pos.qty), reason, conf: pos.conf, note: f.note};
+    const c = {id: pos.id, sym: pos.sym, dir: pos.dir, qty: pos.qty, entry: pos.entry, exit: f.fill, ts: pos.ts, tsClose: Date.now(), pnl: net, pct: net / (pos.entry * pos.qty), reason, conf: pos.conf, note: f.note, strategy: pos.strategy || 'legacy', ctx: pos.ctx || null, fees: pos.fees + f.fee};
     pf.closed.unshift(c); if (pf.closed.length > 300) pf.closed.length = 300;
     if (id === this.state.active) this.state.orders = [{ts: Date.now(), text: `Закрыт ${sideRu(pos.dir)} ${pos.sym} @ ${fmtPrice(f.fill)} · ${fmtUSD(net, true)}`}, ...this.state.orders].slice(0, 30);
     this.emit('close', c); this.touch();
@@ -331,12 +332,12 @@ export class Office extends EventEmitter {
     for (const {id, book, acc} of this.liveBooks()){
       const tag = id === this.state.active ? '' : `«${acc.label}»: `;
       for (const pos of [...book.positions]){
-        if (pos.closing) continue;
+        if (pos.closing || pos.kind === 'carry' || !pos.dir) continue;
         const px = this.price(pos.sym); if (!px) continue;
-        const hitSL = pos.dir > 0 ? px <= pos.sl : px >= pos.sl;
-        const hitTP = pos.dir > 0 ? px >= pos.tp : px <= pos.tp;
+        const hitSL = pos.sl != null && (pos.dir > 0 ? px <= pos.sl : px >= pos.sl);
+        const hitTP = pos.tp != null && (pos.dir > 0 ? px >= pos.tp : px <= pos.tp);
         if (!hitSL && !hitTP) continue;
-        const reason = hitTP ? 'тейк-профит' : pos.be ? 'стоп в безубытке' : 'стоп-лосс';
+        const reason = hitTP ? 'тейк-профит' : pos.strategy ? 'аварийный стоп' : pos.be ? 'стоп в безубытке' : 'стоп-лосс';
         const c = await this.closePosition(pos, reason, id);
         if (c){
           this.post('aliya', null, `${tag}Сработал ${reason}: ${sideRu(c.dir)} ${c.sym} ${fmtUSD(c.pnl, true)} (${fmtPct(c.pct)}).`, 'trade', {sym: c.sym});
@@ -352,7 +353,7 @@ export class Office extends EventEmitter {
     for (const {id, book: pf, acc} of this.liveBooks()){
       const tag = id === st.active ? '' : `«${acc.label}»: `;
       for (const pos of [...pf.positions]){
-        if (pos.closing) continue;
+        if (pos.closing || pos.strategy) continue;
         const px = this.price(pos.sym); const gain = (px - pos.entry) * pos.dir;
         if (!pos.be && gain >= pos.stop){ pos.sl = pos.entry + pos.dir * pos.stop * 0.15; pos.be = true; this.post('aliya', null, `${tag}Перенёс стоп ${pos.sym} в безубыток.`, 'trade', {sym: pos.sym}); }
         if (gain >= pos.stop * 1.6){ const atr = B.indicators(this.market.coins[pos.sym]).atr; const ns = px - pos.dir * 1.1 * atr; if ((ns - pos.sl) * pos.dir > 0) pos.sl = ns; }
@@ -368,6 +369,87 @@ export class Office extends EventEmitter {
     const before = st.pending.length; st.pending = st.pending.filter(x => x.expiresAt > Date.now());
     if (before !== st.pending.length) this.emit('pending');
     this.touch();
+  }
+
+  // прежние агенты торгуют, только если им явно дана доля капитала (по умолчанию — нет: на истории они убыточны)
+  legacyOn(){ const a = this.state.strat && this.state.strat.alloc; return !!(a && a.legacy > 0); }
+
+  // ---------- позиции стратегий: одна чистая позиция на монету и стратегию ----------
+  stratPos(strategy, sym, book = this.state.pf){ return book.positions.find(p => p.strategy === strategy && p.sym === sym && !p.closing); }
+  // изменить позицию стратегии до целевого количества (со знаком); возвращает описание сделки или null
+  async adjust(strategy, sym, targetQty, ctx = {}, reason = 'ребалансировка'){
+    const st = this.state, pf = st.pf, coin = this.market.coins[sym]; if (!coin || !coin.price) return null;
+    const acc = this.acc, px = coin.price, cur = this.stratPos(strategy, sym), q = cur ? cur.qty * cur.dir : 0;
+    if (!acc.ready) return {skip: `нет связи со счётом «${acc.label}»`};
+    if (acc.real && !this.realAllowed(strategy)) return {skip: `стратегия ещё не допущена к реальному счёту`};
+    if (acc.real && !st.auto) return {skip: 'на реальном счёте выключены автосделки — стратегия ведёт его только с ними'};
+    if (!st.tradingOn) return {skip: 'торговля на паузе'};
+    const out = [];
+    // разворот или полное закрытие
+    if (cur && (targetQty === 0 || Math.sign(targetQty) !== cur.dir)){
+      const c = await this.closePosition(cur, reason); if (!c) return {skip: `не удалось закрыть ${sym}`};
+      out.push({act: 'close', sym, dir: c.dir, usd: c.qty * c.exit, pnl: c.pnl});
+      if (targetQty === 0) return {done: out};
+    }
+    const now = this.stratPos(strategy, sym), q0 = now ? now.qty * now.dir : 0, dq = targetQty - q0;
+    if (!dq) return {done: out};
+    if (Math.abs(dq) * px < (acc.minTradeUsd || 10)) return out.length ? {done: out} : {skip: 'изменение меньше минимального ордера'};
+    if (now && Math.sign(dq) !== now.dir){
+      // частичное сокращение: закрываем часть и фиксируем результат этой части
+      const part = {...now, qty: Math.min(Math.abs(dq), now.qty)};
+      let f; try { f = await acc.broker.close(part, px); } catch (e) { this.state.stats.aliya.errors++; return {skip: `биржа не приняла сокращение ${sym}: ${e.message}`}; }
+      const gross = (f.fill - now.entry) * part.qty * now.dir, feeShare = now.fees * part.qty / now.qty;
+      pf.cash += now.entry * part.qty + gross - f.fee; pf.fees += f.fee;
+      const net = gross - f.fee - feeShare;
+      pf.closed.unshift({id: this.ctx.id(), sym, dir: now.dir, qty: part.qty, entry: now.entry, exit: f.fill, ts: now.ts, tsClose: Date.now(), pnl: net, pct: net / (now.entry * part.qty), reason: 'сокращение: ' + reason, strategy, ctx: {...now.ctx, exit: ctx}, fees: feeShare + f.fee});
+      if (pf.closed.length > 300) pf.closed.length = 300;
+      now.qty -= part.qty; now.fees -= feeShare; now.riskUSD = now.qty * now.stop;
+      if (now.qty * px < 1) pf.positions = pf.positions.filter(x => x !== now);
+      else if (now.protId){ await acc.broker.unprotectPos(now); try { const pr = await acc.broker.protectPos(now); if (pr){ now.protId = pr.id; now.protPx = pr.price; } } catch {} }
+      out.push({act: 'reduce', sym, dir: now.dir, usd: part.qty * f.fill, pnl: net});
+      this.touch(); return {done: out};
+    }
+    // открытие или наращивание
+    const dir = Math.sign(dq); let qty = Math.abs(dq);
+    if (dir < 0 && this.CFG.marketType === 'spot') return {skip: 'на споте шорт невозможен'};
+    qty = Math.min(qty, acc.maxOrderUsd / px);
+    if (qty * px * 1.002 > pf.cash * 0.98) qty = pf.cash * 0.98 / (px * 1.002);
+    if (qty * px < (acc.minTradeUsd || 10)) return out.length ? {done: out} : {skip: 'мало свободных средств'};
+    let f; try { f = await acc.broker.open({sym, symbol: coin.symbol, dir, qty, price: px}); }
+    catch (e) { st.stats.aliya.errors++; return {skip: `биржа не приняла ордер ${sym}: ${e.message}`}; }
+    pf.cash -= f.fill * f.qty + f.fee; pf.fees += f.fee; st.stats.aliya.orders++;
+    const hard = ctx.hardStop || 0.25;   // аварийный стоп: дальше обычных дневных колебаний, на случай обвала
+    if (now){
+      const nq = now.qty + f.qty; now.entry = (now.entry * now.qty + f.fill * f.qty) / nq; now.qty = nq; now.fees += f.fee;
+      now.stop = now.entry * hard; now.sl = now.entry - now.dir * now.stop; now.riskUSD = now.qty * now.stop; now.ctx = {...now.ctx, last: ctx};
+      if (acc.broker.protect){ await acc.broker.unprotectPos(now); try { const pr = await acc.broker.protectPos(now); if (pr){ now.protId = pr.id; now.protPx = pr.price; } } catch {} }
+    } else {
+      const stop = f.fill * hard;
+      const pos = {id: this.ctx.id(), sym, symbol: coin.symbol, dir, qty: f.qty, entry: f.fill, sl: f.fill - dir * stop, tp: null, stop, ts: Date.now(), riskUSD: f.qty * stop, conf: Math.round((ctx.conf || 0.5) * 100), fees: f.fee, be: false, orderId: f.orderId, strategy, ctx};
+      pf.positions.push(pos);
+      if (acc.broker.protect){ try { const pr = await acc.broker.protectPos(pos); if (pr){ pos.protId = pr.id; pos.protPx = pr.price; } } catch (e) { this.post('aliya', null, `Не удалось поставить страховочный стоп на бирже для ${sym}: ${describeError(e)}. Позицию веду сам.`, 'system'); } }
+      this.emit('open', pos);
+    }
+    st.orders = [{ts: Date.now(), text: `${dir > 0 ? 'Купил' : 'Продал'} ${sym} ${fmtQty(f.qty, f.fill)} @ ${fmtPrice(f.fill)} · ${strategy}`}, ...st.orders].slice(0, 30);
+    out.push({act: now ? 'add' : 'open', sym, dir, usd: f.qty * f.fill});
+    this.touch(); return {done: out};
+  }
+  // фандинг-арбитраж (только виртуальный счёт): спот + шорт фьючерса, деньги заморожены, доход — фандинг
+  openCarry(sym, notional, P, ctx = {}){
+    const pf = this.state.books.paper, locked = notional * (1 + 1 / P.lev), cost = notional * P.cost / 2;
+    if (locked + cost > pf.cash * 0.98) return null;
+    pf.cash -= locked + cost; pf.fees += cost;
+    const pos = {id: this.ctx.id(), kind: 'carry', strategy: 'carry', sym, symbol: (this.market.coins[sym] || {}).symbol, dir: 0, qty: 1, entry: locked, notional, lev: P.lev, funding: 0, fees: cost, sl: null, tp: null, stop: 0, riskUSD: 0, conf: 0, ts: Date.now(), ctx};
+    pf.positions.push(pos); this.touch(); return pos;
+  }
+  creditCarry(pos, rate){ const pf = this.state.books.paper, g = pos.notional * rate; pf.cash += g; pos.funding += g; pos.lastRate = rate; return g; }
+  closeCarry(pos, reason = 'фандинг упал'){
+    const pf = this.state.books.paper; if (!pf.positions.includes(pos)) return null;
+    const cost = pos.notional * (pos.ctx && pos.ctx.costRate || 0.0038) / 2;
+    pf.cash += pos.entry - cost; pf.fees += cost; pf.positions = pf.positions.filter(x => x !== pos);
+    const net = pos.funding - pos.fees - cost;
+    const c = {id: pos.id, kind: 'carry', sym: pos.sym, dir: 0, qty: pos.notional, entry: 0, exit: 0, ts: pos.ts, tsClose: Date.now(), pnl: net, pct: net / pos.entry, reason, strategy: 'carry', ctx: pos.ctx, fees: pos.fees + cost, funding: pos.funding};
+    pf.closed.unshift(c); if (pf.closed.length > 300) pf.closed.length = 300; this.touch(); return c;
   }
 
   // стратегия допущена к реальным деньгам, только если прошла проверку (state.gate[id].real === true)
@@ -417,7 +499,7 @@ export class Office extends EventEmitter {
       news: st.news.slice(0, 6).map(n => ({coins: n.coins.length ? n.coins : 'весь рынок', title: n.titleRu || n.title, source: n.source, reliability: n.rel, tone: r2(n.s), minutes_ago: Math.round((Date.now() - n.ts) / 60000)})),
       boris_evals: st.evalLog.slice(0, 4).map(e => ({coin: e.sym, side: sideRu(e.dir), risk: e.risk, verdict: B.VERDICT_RU[e.verdict], reasons: e.reasons})),
       timur_signals: st.sigLog.slice(0, 4).map(s => ({coin: s.sym, type: s.type === 'open' ? sideRu(s.dir) : 'закрыть', confidence: s.conf})),
-      positions: pf.positions.map(p => ({coin: p.sym, side: sideRu(p.dir), qty: +p.qty.toPrecision(5), entry: +p.entry.toPrecision(6), price: +this.price(p.sym).toPrecision(6), pnl: r2(this.upnl(p)), stop: +p.sl.toPrecision(6), take: +p.tp.toPrecision(6)})),
+      positions: pf.positions.map(p => ({coin: p.sym, side: sideRu(p.dir), qty: +p.qty.toPrecision(5), entry: +p.entry.toPrecision(6), price: +this.price(p.sym).toPrecision(6), pnl: r2(this.upnl(p)), stop: p.sl != null ? +p.sl.toPrecision(6) : null, take: p.tp != null ? +p.tp.toPrecision(6) : null, strategy: p.strategy || 'legacy'})),
       pending_approvals: st.pending.map(p => ({coin: p.sym, side: sideRu(p.dir), confidence: p.conf})),
       recent_trades: cl.slice(0, 6).map(c => ({coin: c.sym, side: sideRu(c.dir), pnl: r2(c.pnl), reason: c.reason})),
     };
@@ -462,6 +544,7 @@ ${JSON.stringify(this.snapshot())}`;
         balance: this.broker.lastBalance || null, maxOrderUsd: this.acc.maxOrderUsd, closedCount: pf.closed.length, wins: pf.closed.filter(c => c.pnl > 0).length, grossWin: pf.closed.filter(c => c.pnl > 0).reduce((a, c) => a + c.pnl, 0), grossLoss: -pf.closed.filter(c => c.pnl <= 0).reduce((a, c) => a + c.pnl, 0), realized: pf.closed.reduce((a, c) => a + c.pnl, 0)},
       news: st.news.slice(0, 30), brief: st.brief, evals: st.evals, evalLog: st.evalLog, sigLog: st.sigLog, pending: st.pending, orders: st.orders, stats: st.stats,
       status: {market: this.market.status, ai: aiEnabled()},
+      ...(this.extra ? this.extra() : {}),
     };
   }
 }

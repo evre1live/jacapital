@@ -4,7 +4,7 @@
 import * as B from './brain.js';
 import * as S from './strategies.js';
 
-export const BT_VERSION = 2;
+export const BT_VERSION = 3;
 const DAY = 864e5, TF = {'5m': 3e5, '1h': 36e5, '1d': DAY};
 const TZ_SHIFT = 5 * 36e5; // торговый день офиса — по Ташкенту
 const LBS = [5, 10, 20, 30, 60, 90, 150, 250, 360];
@@ -360,6 +360,10 @@ export function computeAll(data, {coins, params: P, cost = {fee: 0.0005, slip: 0
     params: {riskPct: P.riskPct, rr: P.rr, threshold: P.threshold, maxPos: P.maxPos, timeStop: P.timeStop, dailyLimit: P.dailyLimit, shorts: P.shorts},
     ml: {auc: ml.auc, n: ml.preds.length, features: S.ML_FEATURES, coef: ml.model ? ml.model.w.map(x => +x.toFixed(3)) : null, base: ml.model ? ml.model.base : null},
     carryNow: carry ? {active: carry.active} : null,
+    mlModel: (() => { const m = finalModel(dd, tl.series, now); return m ? {...m, auc: ml.auc} : null; })(),
+    // для распределения капитала: итоги стратегий с 2021 (тренд с ML — с 2022) и веса портфеля
+    pick: {trend: metrics(tlml.curve), trendNoMl: metrics(tlFromMl.curve), trendNoMlAfterPub: metrics(cut(tlFromMl.curve, PUB)), carry: carry ? metrics(carry.curve) : null, mr: metrics(mr.curve), trendAfterPub: metrics(cut(tlml.curve, PUB)), carryAfterPub: carry ? metrics(cut(carry.curve, PUB)) : null, mrAfterPub: metrics(cut(mr.curve, PUB)),
+      weights: port ? Object.fromEntries(port.ids.map((id, k) => [id === 'tlml' ? 'trend' : id, port.weights[k]])) : null},
     windows: [
       win('w120', 'Последние 120 дней', w120, ['tl', 'tlml', 'carry', 'mr', 'port', 'btc']),
       win('w365', 'Последние 365 дней', w365, ['tl', 'tlml', 'carry', 'mr', 'port', 'btc', 'ew'],
@@ -390,5 +394,49 @@ export function summaryLines(res){
   const all = res.windows.find(w => w.id === 'all');
   if (all) for (const r of all.rows) out.push(`[backtest]   по годам — ${r.name}: ` + Object.entries(r.years).map(([y, v]) => `${y} ${pct(v)}`).join(', '));
   if (res.ml) out.push(`[backtest] ML: AUC вне выборки ${res.ml.auc != null ? res.ml.auc.toFixed(3) : '—'} на ${res.ml.n} прогнозах (0,5 — угадывание); база ${res.ml.base != null ? Math.round(res.ml.base * 100) + '%' : '—'}; веса: ${res.ml.coef ? res.ml.features.map((f, i) => `${f} ${res.ml.coef[i]}`).join(', ') : '—'}`);
+  return out;
+}
+
+// ---------- модель ML для живой торговли: обучена на всей доступной истории ----------
+export function finalModel(dd, series, now = Date.now()){
+  const feats = S.mlFeatures(dd.c, series, dd.f), {X, y} = S.mlSamples(dd.c, feats, now);
+  if (X.length < S.ML_P.minTrain) return null;
+  const m = S.fitLogit(X, y);
+  return {w: m.w, b: m.b, mu: m.mu, sd: m.sd, base: m.base, n: m.n, ts: now};
+}
+
+// ---------- проверка изменения параметров: прежние и новые значения на одних и тех же данных ----------
+// риск-слой (тормоз при просадке) — поверх дневной кривой портфеля
+export function riskOverlay(curve, R){
+  if (!curve || curve.length < 2) return curve;
+  const out = [[curve[0][0], curve[0][1]]]; let e = curve[0][1], peak = e, halt = null;
+  for (let i = 1; i < curve.length; i++){
+    const r = curve[i][1] / curve[i - 1][1] - 1, t = curve[i][0];
+    if (halt != null && t - halt > 14 * DAY){ halt = null; peak = e; }
+    const dd = 1 - e / peak;
+    if (halt == null && dd >= R.ddStop) halt = t;
+    const k = halt != null ? 0 : dd >= R.ddBrake ? 0.5 : 1;
+    e *= 1 + k * r; peak = Math.max(peak, e); out.push([t, e]);
+  }
+  return out;
+}
+export function strategyCurve(data, strategy, P, all, {cost = {fee: 0.0005, slip: 0.0002}} = {}){
+  const {dd, d1h} = data;
+  const trend = Pt => { const ser = Object.fromEntries(Object.keys(dd.c).filter(s => dd.c[s].n > 120).map(s => [s, S.trendSeries(dd.c[s], Pt)])); const ml = S.mlWalkForward(dd.c, ser, dd.f, ML_FROM); return simTrend(dd, {cost, from: START, P: Pt, series: ser, mult: ml.mult}).curve; };
+  if (strategy === 'trend') return trend(P);
+  if (strategy === 'carry'){ const c = simCarry(dd, {from: START, P}); return c && c.curve; }
+  if (strategy === 'mr') return simMR(d1h, {cost, from: START, P}).curve;
+  if (strategy === 'risk'){
+    const cv = {trend: trend(all.trend)}; const c = simCarry(dd, {from: START, P: all.carry}); if (c) cv.carry = c.curve; cv.mr = simMR(d1h, {cost, from: START, P: all.mr}).curve;
+    const ids = Object.keys(all.alloc || {}).filter(k => cv[k] && all.alloc[k] > 0);
+    const port = combine(Object.fromEntries((ids.length ? ids : Object.keys(cv)).map(k => [k, cv[k]])), ML_FROM);
+    return port && riskOverlay(port.curve, P);
+  }
+  throw new Error('Неизвестная стратегия: ' + strategy);
+}
+export function validateParams(data, {strategy, base, cand, all, windows}){
+  const cb = strategyCurve(data, strategy, base, all), cc = strategyCurve(data, strategy, cand, all);
+  const out = {strategy, windows: []};
+  for (const w of windows){ out.windows.push({id: w.id, title: w.title, from: w.from, to: w.to, base: metrics(slice(cb, w.from, w.to)), cand: metrics(slice(cc, w.from, w.to))}); }
   return out;
 }
