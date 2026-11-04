@@ -70,6 +70,15 @@ export class Office extends EventEmitter {
       }
     }
     if (!this.accounts[s.active] || !this.accounts[s.active].configured) s.active = 'paper';
+    s.gate ||= {}; s.migrations ||= {};
+    if (!s.migrations.paperNov2026){
+      s.migrations.paperNov2026 = Date.now();
+      if (this.accounts[s.active] && this.accounts[s.active].real){
+        s.active = 'paper';
+        (s.feed ||= []).unshift({id: s.ids++, ts: Date.now(), from: 'system', to: null, text: 'Офис переведён на виртуальный счёт: прежняя логика агентов убыточна на истории. Реальные деньги получат только стратегии, прошедшие проверку. Открытые позиции на Binance ведутся до своих стопов и тейков.', tag: 'system'});
+        console.log('[office] активный счёт переключён на виртуальный (защита реальных денег)');
+      }
+    }
     return attachViews(s);
   }
   save(){
@@ -167,7 +176,7 @@ export class Office extends EventEmitter {
     const book = this.state.pf;
     if (!book.everActive){ book.everActive = true; if (acc.real) book.auto = false; }
     this.post('system', null, `Счёт переключён: «${acc.label}».` +
-      (acc.real ? ` Сделки идут на настоящие деньги. ${book.auto ? 'Автосделки включены.' : 'Каждую сделку Артур будет ждать вашего подтверждения.'}` : '') +
+      (acc.real ? ` Сделки идут на настоящие деньги — но только по стратегиям, прошедшим проверку; остальные сигналы Артур пропустит. ${book.auto ? 'Автосделки включены.' : 'Каждую сделку Артур будет ждать вашего подтверждения.'}` : '') +
       (prevOpen ? ` На счёте «${prev.label}» осталось позиций: ${prevOpen} — стопы и тейки по ним продолжают работать.` : ''), 'system');
     this.save(); this.emit('reset');
     return true;
@@ -264,6 +273,8 @@ export class Office extends EventEmitter {
     const st = this.state, p = st.params, pf = st.pf;
     const res = (kind, text) => ({kind, text, sig});
     if (!this.acc.ready) return res('skip', `Пропускаю ${sideRu(sig.dir)} ${sig.sym}: нет связи со счётом «${this.acc.label}».`);
+    // реальные деньги — только стратегиям, прошедшим проверку на истории и на виртуальном счёте
+    if (this.acc.real && !this.realAllowed(sig.strategy)) return res('skip', `Пропускаю ${sideRu(sig.dir)} ${sig.sym} на реальном счёте: стратегия «${sig.strategy || 'прежние агенты'}» ещё не прошла проверку. Проверка идёт на виртуальном счёте.`);
     if (!st.tradingOn) return res('skip', `Пропускаю ${sideRu(sig.dir)} ${sig.sym}: торговля на паузе.`);
     if (pf.killed) return res('skip', `Пропускаю ${sideRu(sig.dir)} ${sig.sym}: сработал дневной лимит убытка.`);
     const ex = pf.positions.find(x => x.sym === sig.sym);
@@ -358,6 +369,9 @@ export class Office extends EventEmitter {
     if (before !== st.pending.length) this.emit('pending');
     this.touch();
   }
+
+  // стратегия допущена к реальным деньгам, только если прошла проверку (state.gate[id].real === true)
+  realAllowed(strategy){ const g = (this.state.gate || {})[strategy || 'legacy']; return !!(g && g.real); }
 
   // ---------- команды из интерфейса ----------
   setProfile(key){ if (!B.PROFILES[key]) return; this.state.profile = key; this.state.params = {...B.PROFILES[key]}; this.post('system', null, `Профиль риска: ${B.PROFILES[key].label}. Риск на сделку ${this.state.params.riskPct}%, порог сигнала ${this.state.params.threshold}%, до ${this.state.params.maxPos} позиций.`, 'system'); this.touch(); }

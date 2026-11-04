@@ -321,7 +321,7 @@ let portBuilt = false;
 // бэктест: короткая сводка в «Портфеле» и подробный отчёт
 const btPct = x => x == null ? '—' : (x >= 0 ? '+' : '−') + Math.abs(x * 100).toFixed(1).replace('.', ',') + '%';
 const btNum = (x, d = 2) => x == null ? '—' : x.toFixed(d).replace('.', ',');
-const BT_COLORS = {a5: 'var(--down)', a5free: 'var(--warn)', a1h: 'var(--down)', tl: 'var(--accent)', tls: '#8e5cf7', tl2: 'var(--faint)', btc: '#f7931a', ew: 'var(--muted)'};
+const BT_COLORS = {a5: 'var(--down)', a5free: 'var(--warn)', a1h: 'var(--down)', tl: 'var(--accent)', tlml: '#2fb5a0', carry: '#5b8def', mr: '#d4a017', mr2: 'var(--faint)', port: '#8e5cf7', port0: 'var(--muted)', tls: '#b07cf7', tl2: 'var(--faint)', btc: '#f7931a', ew: 'var(--muted)'};
 function renderBtBox(){
   const box = $('#btBox'); if (!box) return;
   const bt = S.bt || {}, r = S.btRes;
@@ -329,7 +329,7 @@ function renderBtBox(){
   if (bt.running) body = `<p class="btnote">Идёт расчёт: ${esc(bt.text || '…')}</p>`;
   else if (bt.error) body = `<p class="accterr">${esc(bt.error)}</p>`;
   if (r){
-    const w = r.windows[0], pick = ['a5', 'tl', 'btc'].map(id => w.rows.find(x => x.id === id)).filter(Boolean);
+    const w = r.windows.find(x => x.id === 'w365') || r.windows[0], pick = ['a5', 'a1h', 'port', 'tlml', 'carry', 'btc'].map(id => w.rows.find(x => x.id === id)).filter(Boolean);
     body += `<table class="tbl"><tbody>${pick.map(x => `<tr><td><span class="btdot" style="background:${BT_COLORS[x.id]}"></span>${esc(x.name)}</td><td class="num ${x.m && x.m.total >= 0 ? 'up' : 'down'}">${x.m ? btPct(x.m.total) : '—'}</td></tr>`).join('')}</tbody></table>
       <p class="btnote">${esc(w.title)}, с комиссиями и фандингом · расчёт от ${new Date(r.ts).toLocaleString('ru-RU', {day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'})}</p>`;
   } else if (!bt.running && !bt.error) body = `<p class="btnote">Ещё не считали.</p>`;
@@ -350,7 +350,7 @@ function btChart(w){
   while (ticks.length > 6) ticks = ticks.filter((_, i) => i % 2 === 0 || ticks[i] === 0);
   const grid = ticks.map(r => `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(1 + r).toFixed(1)}" y2="${Y(1 + r).toFixed(1)}" class="${r === 0 ? 'btzero' : 'btgrid'}"/><text x="${P.l - 6}" y="${(Y(1 + r) + 4).toFixed(1)}" class="btax" text-anchor="end">${r === 0 ? '0%' : btPct(r).replace(',0%', '%')}</text>`).join('');
   const d = t => new Date(t).toLocaleDateString('ru-RU', {day: 'numeric', month: 'short', year: '2-digit'});
-  const lines = rows.map(x => `<polyline fill="none" stroke="${BT_COLORS[x.id] || 'var(--muted)'}" stroke-width="${x.id === 'a5' || x.id === 'a1h' || x.id === 'tl' ? 2 : 1.4}" stroke-linejoin="round" points="${x.curve.map(([t, v]) => `${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}"/>`).join('');
+  const lines = rows.map(x => `<polyline fill="none" stroke="${BT_COLORS[x.id] || 'var(--muted)'}" stroke-width="${['a5', 'a1h', 'port', 'tlml'].includes(x.id) ? 2.2 : 1.4}" stroke-linejoin="round" points="${x.curve.map(([t, v]) => `${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}"/>`).join('');
   return `<svg class="btchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Кривые капитала: ${esc(w.title)}">${grid}${lines}<text x="${P.l}" y="${H - 5}" class="btax">${d(t0)}</text><text x="${W - P.r}" y="${H - 5}" class="btax" text-anchor="end">${d(t1)}</text></svg>`;
 }
 function openBtReport(){
@@ -361,8 +361,9 @@ function openBtReport(){
     const rows = w.rows.map(x => { const mm = x.m || {}, st = x.stats || {}, c = x.costs;
       return `<tr><td><span class="btdot" style="background:${BT_COLORS[x.id] || 'var(--muted)'}"></span>${esc(x.name)}${x.note ? `<div class="btsub">${esc(x.note)}</div>` : ''}</td>
         <td class="num ${mm.total >= 0 ? 'up' : 'down'}">${btPct(mm.total)}</td><td class="num">${mm.cagr != null ? btPct(mm.cagr) : '—'}</td><td class="num">${btNum(mm.sharpe)}</td><td class="num">${mm.mdd != null ? btPct(-mm.mdd) : '—'}</td>
+        <td class="num">${mm.posMonths != null ? Math.round(mm.posMonths * 100) + '%' : '—'}</td><td class="num">${mm.worstMonth != null ? btPct(mm.worstMonth) : '—'}</td>
         <td class="num">${st.trades != null ? st.trades : '—'}${st.win != null ? ` · ${Math.round(st.win * 100)}%` : ''}</td><td class="num">${c ? btPct(-(c.fees + c.slip + c.funding)) : '—'}</td></tr>`; }).join('');
-    return `<h4>${esc(w.title)}</h4>${btChart(w)}<div class="btscroll"><table class="tbl bttbl"><thead><tr><th>Стратегия</th><th class="num">Итог</th><th class="num">В год</th><th class="num">Шарп</th><th class="num">Просадка</th><th class="num">Сделок · прибыльных</th><th class="num">Издержки</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `<h4>${esc(w.title)}</h4>${btChart(w)}<div class="btscroll"><table class="tbl bttbl"><thead><tr><th>Стратегия</th><th class="num">Итог</th><th class="num">В год</th><th class="num">Шарп</th><th class="num">Просадка</th><th class="num">Месяцев в плюсе</th><th class="num">Худший месяц</th><th class="num">Сделок · прибыльных</th><th class="num">Издержки</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   };
   const all = r.windows.find(w => w.id === 'all');
   let yrs = '';
@@ -372,7 +373,8 @@ function openBtReport(){
       <p class="btsub">«С 04.2025» — период после публикации исследования, на котором основан тренд-ансамбль: эти данные авторы видеть не могли.</p>`;
   }
   m.innerHTML = `<div class="mbox btbox" role="dialog" aria-modal="true" aria-labelledby="btTitle"><div class="bthead"><h3 id="btTitle">Проверка стратегий на истории Binance</h3><button type="button" class="btn btn-sm" id="btClose">Закрыть</button></div>
-    <p>Фьючерсы USDⓈ-M: ${esc(r.coins.join(', '))}. Комиссия ${btNum(r.cost.fee * 100)}% и проскальзывание ${btNum(r.cost.slip * 100)}% с каждой стороны, фандинг по фактическим ставкам Binance. Старт $10 000, без плеча. Новости в истории недоступны, поэтому агенты проверены только на технической части сигнала. Издержки — в процентах от стартового капитала.</p>
+    <p>Фьючерсы USDⓈ-M: ${esc(r.coins.join(', '))}. Комиссия ${btNum(r.cost.fee * 100)}% и проскальзывание ${btNum(r.cost.slip * 100)}% с каждой стороны, фандинг по фактическим ставкам Binance. Старт $10 000. Новости в истории недоступны, поэтому прежние агенты проверены только на технической части сигнала. Издержки — в процентах от стартового капитала. Фандинг-арбитраж посчитан без расхождения цен спота и фьючерса при входе и выходе — в жизни доход будет немного ниже.</p>
+    ${r.ml ? `<p class="btsub">ML-фильтр: качество прогноза вне обучающей выборки AUC ${r.ml.auc != null ? btNum(r.ml.auc, 3) : '—'} на ${r.ml.n} прогнозах (0,5 — угадывание, 0,55+ — полезный сигнал).</p>` : ''}
     ${r.windows.map(sec).join('')}${yrs}</div>`;
   const close = () => { m.hidden = true; document.removeEventListener('keydown', onKey); };
   const onKey = ev => { if (ev.key === 'Escape') close(); };
