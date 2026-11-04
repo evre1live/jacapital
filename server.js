@@ -5,7 +5,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {WebSocketServer} from 'ws';
 import {CFG, validateConfig, binanceProblem} from './src/config.js';
-import {makeData, makeAccounts, describeError, setServerIp, maskProxy} from './src/exchange.js';
+import {makeData, makeAccounts, describeError, setServerIp, maskProxy, banLeft} from './src/exchange.js';
 import {ProxyAgent} from 'undici';
 import {Worker} from 'node:worker_threads';
 import ccxt from 'ccxt';
@@ -309,7 +309,7 @@ async function start(){
   CFG.coins = await resolveUniverse({ex: data, CFG});
   for (let attempt = 1; ; attempt++){
     try { await market.init(); break; }
-    catch (e) { market.status = {ok: false, error: describeError(e), fails: attempt}; console.error('[market] запуск:', market.status.error); broadcast({t: 'loading', status: market.status}); await new Promise(r => setTimeout(r, Math.min(60000, 5000 * attempt))); }
+    catch (e) { market.status = {ok: false, error: describeError(e), fails: attempt}; console.error('[market] запуск:', market.status.error); broadcast({t: 'loading', status: market.status}); await new Promise(r => setTimeout(r, banLeft() ? banLeft() + 2000 : Math.min(60000, 5000 * attempt))); }
   }
   office = new Office({CFG, market, accounts});
   engine = new Engine({office, market, CFG});

@@ -6,11 +6,37 @@ import {binanceProblem} from './config.js';
 
 const cap = s => s[0].toUpperCase() + s.slice(1);
 
+// Лимит запросов Binance считается по IP. На Render исходящий IP общий с другими сервисами, поэтому IP может попасть
+// под временный запрет не по нашей вине. Пока запрет действует, запросы не отправляем: каждый новый запрос его продлевает.
+export const BAN = {until: 0, ip: ''};
+const hhmm = t => new Date(t).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent'});
+function guard(ex){
+  if (!ex || typeof ex.fetch !== 'function' || ex._guarded) return ex;
+  const f = ex.fetch.bind(ex); ex._guarded = true;
+  ex.fetch = async (...a) => {
+    if (Date.now() < BAN.until){ const e = new ccxt.DDoSProtection('ip banned'); e.userMessage = banText(); throw e; }
+    try { return await f(...a); }
+    catch (e){
+      const msg = String(e && e.message || ''), m = /banned until (\d{13})/.exec(msg);
+      if (m) BAN.until = Math.max(BAN.until, +m[1] + 5000);
+      else if (e instanceof ccxt.RateLimitExceeded || /"code":\s*-1003|\b429\b|Too many requests/i.test(msg)) BAN.until = Math.max(BAN.until, Date.now() + 60000);
+      if (m || Date.now() < BAN.until){ BAN.ip = SERVER_IP; console.warn(`[binance] лимит запросов по IP${SERVER_IP ? ' ' + SERVER_IP : ''}: пауза до ${new Date(BAN.until).toISOString()}`); e.userMessage = banText(); }
+      throw e;
+    }
+  };
+  return ex;
+}
+export const banLeft = () => Math.max(0, BAN.until - Date.now());
+function banText(){
+  return `Binance временно ограничил запросы с IP сервера${BAN.ip ? ' ' + BAN.ip : ''} до ${hhmm(BAN.until)} (по Ташкенту). Исходящий IP на Render общий с другими сервисами — запрет может быть не из-за нас. Офис подключится сам, как только ограничение снимут; позиции на бирже остаются как есть.`;
+}
+
 // Котировки: одна биржа для всех счетов. Демо-торговля Binance и Bybit идёт по ценам основной биржи.
 export function makeData(CFG) {
   if (CFG.quotes === 'mock') return new MockExchange(CFG);
   const only = CFG.quotes === 'binance' ? {fetchMarkets: CFG.marketType === 'swap' ? ['linear'] : ['spot']} : {};
-  return new ccxt[CFG.quotes]({enableRateLimit: true, timeout: 15000, options: {defaultType: CFG.marketType === 'swap' ? 'swap' : 'spot', ...only}});
+  const ex = new ccxt[CFG.quotes]({enableRateLimit: true, timeout: 15000, options: {defaultType: CFG.marketType === 'swap' ? 'swap' : 'spot', ...only}});
+  return CFG.quotes === 'binance' ? guard(ex) : ex;
 }
 
 // Счета: виртуальный — всегда; Binance — если заданы ключи; старая настройка EXCHANGE + EXCHANGE_API_KEY (Bybit) — тоже.
@@ -36,6 +62,7 @@ export function makeAccounts(CFG, data) {
       ex = new ccxt.binance({...opts, apiKey: b.key, secret: b.secret, options: {...opts.options, adjustForTimeDifference: true, recvWindow: 10000, fetchMarkets: CFG.marketType === 'swap' ? ['linear'] : ['spot']}});
       if (b.env === 'demo') ex.enableDemoTrading(true);
       if (b.proxy) ex.httpsProxy = b.proxy;
+      if (!b.proxy) guard(ex); // через прокси у счёта свой IP и свой лимит
     }
     acc.broker = new ExchangeBroker(ex, CFG, {name: 'Binance', live: b.env === 'live', checkKey: b.env === 'live', protect: b.env !== 'mock' && CFG.marketType === 'swap', binance: b.env !== 'mock'});
   }
