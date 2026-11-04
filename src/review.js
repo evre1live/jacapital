@@ -3,7 +3,7 @@
 // на новых данных, которых не было при решении, и откатывают, если она оказалась хуже.
 import fs from 'node:fs';
 import path from 'node:path';
-import {askJSON, aiEnabled} from './claude.js';
+import {ask, parseJSON, aiEnabled, lastMeta} from './claude.js';
 import {PARAM_SPACE, STRATS} from './engine.js';
 import {fmtUSD} from './brain.js';
 
@@ -27,6 +27,7 @@ export class Reviewer {
   }
   save(){ try { fs.mkdirSync(this.CFG.dataDir, {recursive: true}); fs.writeFileSync(this.file + '.tmp', JSON.stringify(this.j)); fs.renameSync(this.file + '.tmp', this.file); } catch (e) { console.warn('[review] не сохранил журнал:', e.message); } }
   get last(){ return this.j.reviews[0] || null; }
+  get lastOk(){ return this.j.reviews.find(r => !r.error) || null; }
   publicView(){ return {running: this.running, text: this.text, ai: aiEnabled(), reviews: this.j.reviews.slice(0, 12), changes: this.j.changes.slice(0, 40)}; }
 
   // ---------- что отдаём Claude ----------
@@ -72,7 +73,16 @@ export class Reviewer {
 - Пиши по-русски, коротко и конкретно.
 Ответь только JSON:
 {"summary":"2–4 предложения: что произошло и почему","mistakes":[{"title":"…","evidence":"цифры из данных","cost_usd":число или null,"lesson":"что делать иначе"}],"proposals":[{"strategy":"trend|carry|mr|risk","param":"…","value":число,"why":"…"}],"watch":["что отслеживать"]}`;
-      const d = await askJSON({system, prompt: 'Данные офиса:\n' + JSON.stringify(pack), model: this.CFG.modelReview, maxTokens: 3000, kind: 'review'});
+      let txt = await ask({system, prompt: 'Данные офиса:\n' + JSON.stringify(pack), model: this.CFG.modelReview, maxTokens: 8000, kind: 'review'}), d;
+      rec.usage = lastMeta.usage ? {in: lastMeta.usage.input_tokens, out: lastMeta.usage.output_tokens} : null;
+      try { d = parseJSON(txt); }
+      catch (e) {
+        console.warn(`[review] ответ не разобран как JSON: остановка ${lastMeta.stop}, ${txt.length} симв., начало «${txt.slice(0, 120).replace(/\s+/g, ' ')}»`);
+        // починка: та же модель переводит свой ответ в строгий JSON по схеме
+        txt = await ask({system: 'Перепиши ответ аналитика в строгий JSON без пояснений и без markdown. Схема: {"summary":"…","mistakes":[{"title":"…","evidence":"…","cost_usd":число или null,"lesson":"…"}],"proposals":[{"strategy":"trend|carry|mr|risk","param":"…","value":число,"why":"…"}],"watch":["…"]}. Если ответ оборван — заверши его по смыслу, ничего не выдумывая; незаконченные пункты отбрось.',
+          prompt: txt.slice(0, 30000), model: this.CFG.modelReview, maxTokens: 6000, kind: 'review'});
+        d = parseJSON(txt);
+      }
       rec.summary = String(d.summary || '').slice(0, 1200);
       rec.mistakes = (Array.isArray(d.mistakes) ? d.mistakes : []).slice(0, 6).map(m => ({title: String(m.title || '').slice(0, 160), evidence: String(m.evidence || '').slice(0, 400), cost: isFinite(+m.cost_usd) && m.cost_usd !== null ? +m.cost_usd : null, lesson: String(m.lesson || '').slice(0, 300)}));
       rec.watch = (Array.isArray(d.watch) ? d.watch : []).slice(0, 4).map(x => String(x).slice(0, 200));
@@ -80,6 +90,7 @@ export class Reviewer {
       this.text = props.length ? `проверяю поправки на истории (${props.length})` : 'готово'; this.office.emit('review');
       for (const p of props) rec.proposals.push(await this.consider(p));
       rec.took = Math.round((Date.now() - t0) / 1000);
+      console.log(`[review] готово за ${rec.took} с: ошибок ${rec.mistakes.length}, поправок ${rec.proposals.length} (принято ${rec.proposals.filter(p => p.verdict === 'applied').length})`);
       this.j.reviews.unshift(rec); this.j.reviews.length = Math.min(this.j.reviews.length, 60);
       this.announce(rec);
       return rec;

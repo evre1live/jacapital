@@ -129,7 +129,7 @@ wss.on('connection', ws => {
         case 'review': {
           if (!reviewer) break;
           if (reviewer.running){ sendTo(ws, {t: 'toast', text: 'Разбор уже идёт'}); break; }
-          if (reviewer.last && Date.now() - reviewer.last.ts < 30 * 60e3){ sendTo(ws, {t: 'toast', text: 'Последний разбор был меньше 30 минут назад'}); break; }
+          if (reviewer.lastOk && Date.now() - reviewer.lastOk.ts < 30 * 60e3){ sendTo(ws, {t: 'toast', text: 'Последний разбор был меньше 30 минут назад'}); break; }
           sendTo(ws, {t: 'toast', text: 'Claude разбирает сделки — это займёт 1–3 минуты'});
           reviewer.run('по запросу из интерфейса').catch(e => sendTo(ws, {t: 'toast', text: e.code === 'no_key' ? 'На сервере не задан ANTHROPIC_API_KEY' : 'Разбор не удался: ' + e.message}));
           break;
@@ -363,9 +363,9 @@ async function start(){
   setTimeout(() => engine.tick(), 15000);
   setInterval(() => engine.tick(), 60000);
   // работа над ошибками: каждый день в 09:30 по Ташкенту (04:30 UTC); если давно не было — через 20 минут после запуска
-  const reviewDue = () => { const l = reviewer.last; return !l || Date.now() - l.ts > 20 * 36e5; };
+  const reviewDue = () => { const l = reviewer.lastOk; return !l || Date.now() - l.ts > 20 * 36e5; };
   setInterval(() => { const d = new Date(); if (d.getUTCHours() === 4 && d.getUTCMinutes() >= 30 && d.getUTCMinutes() < 32 && reviewDue() && !reviewer.running && aiEnabled()) reviewer.run().catch(() => {}); }, 60000);
-  setTimeout(() => { if (reviewDue() && aiEnabled() && !reviewer.running) reviewer.run('после запуска сервера').catch(() => {}); }, 20 * 60000);
+  setTimeout(() => { if (reviewDue() && aiEnabled() && !reviewer.running) reviewer.run('после запуска сервера').catch(() => {}); }, 8 * 60000);
   setInterval(() => { try { evaluateGate(); } catch (e) { console.warn('[gate]', e.message); } }, 6 * 36e5);
   // бэктест в фоне: при первом запуске и раз в неделю
   if (process.env.BACKTEST !== 'off' && (!BT.res || Date.now() - BT.res.ts > 7 * 864e5)) setTimeout(() => runBacktestBg(BT.res ? 'прошла неделя' : 'первый запуск'), 20000);

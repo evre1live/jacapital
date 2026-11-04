@@ -4,6 +4,7 @@ import {CFG} from './config.js';
 const LIMITS = {chat: 40, meeting: 8, news: 30, review: 6}; // запросов в час
 const used = {chat: [], meeting: [], news: [], review: []};
 export const aiEnabled = () => !!CFG.anthropicKey;
+export const lastMeta = {stop: null, usage: null};   // причина остановки и расход токенов последнего ответа
 
 function take(kind){
   const now = Date.now(); const arr = used[kind] || (used[kind] = []);
@@ -28,6 +29,7 @@ export async function ask({system, messages, prompt, fast = false, model = null,
     const e = new Error(`Claude API ${r.status}: ${msg}`); e.code = r.status === 429 ? 'rate_limited' : r.status === 401 ? 'bad_key' : 'upstream'; throw e;
   }
   const d = JSON.parse(txt);
+  lastMeta.stop = d.stop_reason || null; lastMeta.usage = d.usage || null;
   return (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
 }
 
