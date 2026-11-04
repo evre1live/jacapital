@@ -175,11 +175,11 @@ async function runBacktestBg(why){
     // для фьючерсов — то же подключение, что и котировки: общий учёт лимитов Binance и без второй загрузки рынков
     const ex = CFG.marketType === 'swap' ? data : new ccxt.binance({enableRateLimit: true, timeout: 20000, options: {defaultType: 'swap', fetchMarkets: ['linear']}});
     const coins = Object.keys(market.coins), now = Date.now();
-    const data = await loadAll({ex, coins, symbolFor: b => symbolFor(b, 'swap'), now, log: btStatus});
+    const hist = await loadAll({ex, coins, symbolFor: b => symbolFor(b, 'swap'), now, log: btStatus});
     btStatus('считаю стратегии');
     const params = {...office.state.params};
     const res = await new Promise((ok, bad) => {
-      const w = new Worker(new URL('./src/backtest-worker.js', import.meta.url), {workerData: {data, opts: {coins, params, now}}});
+      const w = new Worker(new URL('./src/backtest-worker.js', import.meta.url), {workerData: {data: hist, opts: {coins, params, now}}});
       w.once('message', m => m.ok ? ok(m.res) : bad(new Error(m.error))); w.once('error', bad);
     });
     res.took = Math.round((Date.now() - t0) / 1000);
