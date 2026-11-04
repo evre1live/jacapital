@@ -35,6 +35,37 @@ AGENT_DEFS.forEach((d,i)=>{
     plan:{x:dx+40, y:SEAT_Y}, exitPath:null, blinkAt:rnd(1,4), walkStatus:null});
 });
 const AG_LIST = AGENT_DEFS.map(d=>AG[d.id]);
+// ---------- кабинет руководителя: такое же помещение перед офисом, за стеклянной перегородкой ----------
+const CAB = {y0:FD, y1:FD*2, doorX:266, doorW:34};
+const BOSS_DESK = {x:135, y:292, w:84, d:36};
+const BOSS_SEAT = {x:135, y:266};
+const BOSS_DEF = {id:'boss', name:'Джама', role:'Руководитель офиса', short:'Руководитель', color:'#8e3047',
+  look:{skin:'#e0a983', hair:'#e0a983', hairL:'#e9b893', shirt:'#5a1a2a', shirtL:'#7a2a3c', shirtD:'#3e1019', pants:'#4e1724', shoes:'#141414', iris:'#3b2618', style:'bald', acc:'', mug:'#ffffff'},
+  duties:['Отвечает за результат офиса и дисциплину риска','Следит за командой из кабинета через стеклянную перегородку','Приходит на планёрки и подводит итог']};
+AG.boss = Object.assign({}, BOSS_DEF, {fem:false, i:4, dx:BOSS_DESK.x, sx:BOSS_SEAT.x, sy:BOSS_SEAT.y, ax:BOSS_SEAT.x+52, x:BOSS_SEAT.x, y:BOSS_SEAT.y, facing:'SW', seated:true, actions:[], queue:[], job:null,
+  status:'В кабинете', bubble:null, emote:null, typing:false, phase:0, jumpT:0, armsUp:0, idle:0, nextIdle:rnd(14,26), cup:false, holdCup:false, carry:false,
+  plan:{x:BOSS_SEAT.x, y:BOSS_SEAT.y}, exitPath:null, blinkAt:rnd(1,4), walkStatus:null, boss:true});
+const BOSS = AG.boss;
+const ALL_AG = [...AG_LIST, BOSS];
+// маршрут руководителя: из-за стола вправо, дальше по кабинету; через дверь в перегородке — в офис
+const BOSS_AISLE = {x:BOSS_DESK.x + BOSS_DESK.w/2 + 16, y:BOSS_SEAT.y};
+function bossWalk(a, pts, status){ act(a, {type:'stand', status}); act(a, {type:'walk', x:BOSS_AISLE.x, y:BOSS_AISLE.y}); for (const q of pts) act(a, {type:'walk', x:q[0], y:q[1]}); }
+function bossBack(a, pts){ act(a, {type:'call', fn:()=>{ a.walkStatus = 'Возвращается в кабинет'; }}); for (const q of pts.slice().reverse()) act(a, {type:'walk', x:q[0], y:q[1]}); act(a, {type:'walk', x:BOSS_AISLE.x, y:BOSS_AISLE.y}); act(a, {type:'walk', x:a.sx, y:a.sy}); act(a, {type:'sit'}); }
+function bossIdle(a){
+  const r = rand();
+  if (r < 0.45){
+    // подходит к стеклу и смотрит, как работает команда
+    const x = [60, 205, 230, 298][Math.floor(rand()*4)], pts = x > CAB.doorX ? [[CAB.doorX + 30, CAB.y0 + 36], [x, CAB.y0 + 14]] : [[x, CAB.y0 + 14]];
+    bossWalk(a, pts, 'Идёт к стеклу'); act(a, {type:'face', dir:'NE'});
+    act(a, {type:'wait', dur:rnd(5,9), status:'Смотрит, как работает команда'}); bossBack(a, pts);
+  } else if (r < 0.75){
+    // к книжному стеллажу у левой стены
+    const pts = [[BOSS_AISLE.x, CAB.y0 + 150], [26, CAB.y0 + 150]];
+    bossWalk(a, pts, 'Идёт к стеллажу'); act(a, {type:'face', dir:'NW'}); act(a, {type:'wait', dur:rnd(3,5), status:'Ищет отчёт'}); bossBack(a, pts);
+  } else a.armsUp = 1.1;
+}
+// дорога на планёрку: через дверь в перегородке к круглому столу
+const BOSS_MEET = {x:190, y:180, f:'NE', path:[[CAB.doorX, CAB.y0 + 40], [CAB.doorX, CAB.y0 - 12], [205, CAB.y0 - 16]]};
 let PLANES = [], selectedAgent = 'nika', hoverAgent = null, bellT = 0, flashNews = null;
 
 function act(a, x){ a.actions.push(x); if (x.type==='walk') a.plan = {x:x.x, y:x.y}; if (x.type==='sit') a.plan = {x:a.sx, y:SEAT_Y}; }
@@ -166,7 +197,7 @@ function updateScene(dt){
   const t = nowS();
   const k = SIM.paused ? 0 : 1;
   const work = dt*SIM.speed*k, walk = dt*Math.min(SIM.speed,3)*k;
-  for (const a of AG_LIST){
+  for (const a of ALL_AG){
     if (a.jumpT>0) a.jumpT = Math.max(0, a.jumpT-dt);
     if (a.armsUp>0) a.armsUp = Math.max(0, a.armsUp-dt);
     if (t > a.blinkAt + 0.14) a.blinkAt = t + rnd(2,5);
@@ -177,12 +208,13 @@ function updateScene(dt){
       if (!x){
         a.typing = a.seated && !SIM.paused && (Math.sin(t*0.7 + a.i*2) > 0.35);
         if (!SIM.paused && !MEET.active && a.queue.length){ a.idle = 0; startJob(a, a.queue.shift()); continue; }
-        a.status = SIM.paused ? 'Пауза' : MEET.active ? 'На планёрке' : (a.id==='aliya' && S.pending.length ? 'Ждёт вашего решения' : 'Следит за рынком');
+        a.status = SIM.paused ? 'Пауза' : MEET.active ? 'На планёрке' : a.boss ? 'В кабинете' : (a.id==='aliya' && S.pending.length ? 'Ждёт вашего решения' : 'Следит за рынком');
         if (!SIM.paused && !MEET.active && a.seated && SIM.speed <= 3){
           a.idle += dt;
           if (a.idle > a.nextIdle){
-            a.idle = 0; a.nextIdle = rnd(12,26);
-            if (rand() < 0.28 && !(a.id==='aliya' && S.pf.positions.length>2)) coffeeTrip(a);
+            a.idle = 0; a.nextIdle = a.boss ? rnd(16,32) : rnd(12,26);
+            if (a.boss) bossIdle(a);
+            else if (rand() < 0.28 && !(a.id==='aliya' && S.pf.positions.length>2)) coffeeTrip(a);
             else a.armsUp = 1.3;
           }
         }
@@ -208,8 +240,8 @@ function updateScene(dt){
       if (x.type==='wait'){ x.t = (x.t||0)+walk; if (x.t >= x.dur){ a.actions.shift(); continue; } break; }
       if (x.type==='waitUntil'){ if (x.fn()){ a.actions.shift(); continue; } a.status = x.status || a.status; break; }
       a.actions.shift();
-      if (x.type==='stand'){ a.seated = false; a.x = a.sx; a.y = SEAT_Y; a.walkStatus = x.status || null; }
-      else if (x.type==='sit'){ a.walkStatus = null; a.seated = true; a.x = a.sx; a.y = SEAT_Y; a.facing = 'SW'; }
+      if (x.type==='stand'){ a.seated = false; a.x = a.sx; a.y = a.sy ?? SEAT_Y; a.walkStatus = x.status || null; }
+      else if (x.type==='sit'){ a.walkStatus = null; a.seated = true; a.x = a.sx; a.y = a.sy ?? SEAT_Y; a.facing = 'SW'; }
       else if (x.type==='face'){ a.facing = x.dir; }
       else if (x.type==='carry'){ a.carry = x.v; }
       else if (x.type==='call'){ x.fn(); }
@@ -245,11 +277,15 @@ function gatherMeeting(){
     act(a, {type:'waitUntil', fn:()=>!MEET.active, status:'На планёрке'});
     returnToSeat(a);
   }
+  const b = BOSS, m = BOSS_MEET;
+  b.actions = []; if (!b.seated){ b.seated = true; b.x = b.sx; b.y = b.sy; }
+  bossWalk(b, [...m.path, [m.x, m.y]], 'Идёт на планёрку'); act(b, {type:'face', dir:m.f});
+  act(b, {type:'waitUntil', fn:()=>!MEET.active, status:'Проводит планёрку'}); bossBack(b, [...m.path, [m.x, m.y]]);
 }
 function endMeeting(){ MEET.active = false; }
 function resetScene(){
   PLANES = []; MEET.active = false;
-  for (const a of AG_LIST){ Object.assign(a, {x:a.sx, y:SEAT_Y, seated:true, facing:'SW', actions:[], queue:[], job:null, bubble:null, emote:null, carry:false, holdCup:false, plan:{x:a.sx,y:SEAT_Y}, exitPath:null}); }
+  for (const a of ALL_AG){ Object.assign(a, {x:a.sx, y:a.sy ?? SEAT_Y, seated:true, facing:'SW', actions:[], queue:[], job:null, bubble:null, emote:null, carry:false, holdCup:false, plan:{x:a.sx,y:a.sy ?? SEAT_Y}, exitPath:null}); }
 }
 
 // ================= ОТРИСОВКА =================
@@ -987,7 +1023,7 @@ function renderScene(ctx, cw, ch, dpr){
     ctx.restore();
   }
   // эмоции
-  for (const a of AG_LIST){ const [hx2, hy2] = P(a.x, a.y, 50*CHS + (a.jumpT>0 ? Math.sin((1-a.jumpT/0.7)*Math.PI)*12 : 0)); drawEmote(ctx, a, t, hx2, hy2); }
+  for (const a of ALL_AG){ if (a.boss && !PROJ3) continue; const [hx2, hy2] = P(a.x, a.y, 50*CHS + (a.jumpT>0 ? Math.sin((1-a.jumpT/0.7)*Math.PI)*12 : 0)); drawEmote(ctx, a, t, hx2, hy2); }
   // свет ламп и мониторов
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   for (const a of AG_LIST){
@@ -1040,7 +1076,7 @@ function renderOverlay(ctx, s, cw, chh){
   const maxW = Math.min(190, Math.max(110, 70*s));
   ctx.font = `600 ${fs}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif`;
   const placed = [];
-  const order = AG_LIST.filter(a=>a.bubble).sort((p,q)=>q.bubble.t0-p.bubble.t0);
+  const order = ALL_AG.filter(a=>a.bubble && (!a.boss || PROJ3)).sort((p,q)=>q.bubble.t0-p.bubble.t0);
   for (const a of order){
     const b = a.bubble; if (!b) continue;
     const age = t - b.t0; if (age > b.dur){ a.bubble = null; continue; }

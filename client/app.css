@@ -135,7 +135,7 @@ select:hover{background-color:var(--fill-2)}
 .layout{display:grid;grid-template-columns:minmax(0,1.72fr) minmax(340px,1fr);grid-template-areas:"office side" "market side";gap:14px;padding:14px;align-items:start}
 .card{border-radius:var(--r-xl)}
 .office{grid-area:office;padding:10px}
-.office-frame{position:relative;border-radius:var(--r-lg);overflow:hidden;background:var(--stage);aspect-ratio:1.47;box-shadow:inset 0 0 0 1px var(--hair),inset 0 1px 0 rgba(255,255,255,.25)}
+.office-frame{position:relative;border-radius:var(--r-lg);overflow:hidden;background:var(--stage);aspect-ratio:1.32;box-shadow:inset 0 0 0 1px var(--hair),inset 0 1px 0 rgba(255,255,255,.25)}
 .office-scroll{width:100%;height:100%}
 #office{display:block;width:100%;height:100%;touch-action:manipulation}
 .stage{position:relative;width:100%;height:100%}
@@ -323,7 +323,7 @@ select:hover{background-color:var(--fill-2)}
 @media (max-width:620px){
   .office-frame{aspect-ratio:auto}
   .office-scroll{overflow-x:auto;overscroll-behavior-x:contain;height:auto}
-  .stage{width:640px;height:435px}
+  .stage{width:640px;height:485px}
   .toast{top:10px;bottom:auto}
 }
 @media (max-width:420px){

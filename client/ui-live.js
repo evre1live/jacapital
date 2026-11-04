@@ -10,7 +10,7 @@ let feedFilter = 'all', activeTab = 'feed', uiReady = false;
 const CSS = {};
 function readCSS(){ const cs = getComputedStyle(document.documentElement); for (const k of ['text','muted','faint','line','up','down','accent','panel','panel-2','grid','ref','ema9','ema21']) CSS[k] = cs.getPropertyValue('--'+k).trim(); }
 function alpha(c, a){ c = String(c||'').trim(); if (c[0] !== '#') return c; let h = c.slice(1); if (h.length === 3) h = h.split('').map(x=>x+x).join(''); const n = parseInt(h.slice(0,6), 16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; }
-const CHATS = {nika:[], boris:[], timur:[], aliya:[]};
+const CHATS = {nika:[], boris:[], timur:[], aliya:[], boss:[]};
 let chatBusy = false;
 
 function toast(text, ms=2800){ const t = $('#toast'); if (!t) return; t.textContent = text; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(()=>{ t.hidden = true; }, ms); }
@@ -28,11 +28,11 @@ function bootLive(){
   on('backtest', renderBtBox);
   on('review', renderRevBox); on('state', ()=>{ if (activeTab==='port') renderStratBox(); });
   on('accounts', ()=>{ renderAccounts(); renderAcctBox(); }); on('hello', renderAccounts); on('state', ()=>{ if (S.account && S.account.id !== shownAccount) renderAccounts(); renderAcctBox(); });
-  on('meetStart', ()=>{ if (!MEET.active){ gatherMeeting(); for (const a of AG_LIST) say(a, '…', 60); } updateMeetBtn(); });
+  on('meetStart', ()=>{ if (!MEET.active){ gatherMeeting(); for (const a of ALL_AG) say(a, '…', 60); } updateMeetBtn(); });
   on('meeting', async m=>{
-    if (m.error){ for (const a of AG_LIST) a.bubble = null; toast(m.error, 4500); endMeeting(); updateMeetBtn(); return; }
-    for (const a of AG_LIST) a.bubble = null;
-    for (const a of AG_LIST){ const line = m.data && m.data[a.id]; if (!line) continue; say(a, line, 3.4); await new Promise(r=>setTimeout(r, 3300)); }
+    if (m.error){ for (const a of ALL_AG) a.bubble = null; toast(m.error, 4500); endMeeting(); updateMeetBtn(); return; }
+    for (const a of ALL_AG) a.bubble = null;
+    for (const a of ALL_AG){ const line = m.data && m.data[a.id]; if (!line) continue; say(a, line, 3.4); await new Promise(r=>setTimeout(r, 3300)); }
     if (m.data && m.data.profile && m.data.profile !== S.profile) offerProfile(m.data.profile);
     await new Promise(r=>setTimeout(r, 2000)); endMeeting(); updateMeetBtn();
   });
@@ -50,8 +50,8 @@ function frame(now){
 }
 
 function initStaticUI(){
-  for (const a of AG_LIST){ const cv = document.createElement('canvas'); renderAvatarSized(a.id, cv); AVA[a.id] = cv.toDataURL(); }
-  $('#crew').innerHTML = AG_LIST.map(a=>`<button type="button" data-agent="${a.id}" aria-pressed="false" style="--c:${a.color}"><img class="ava" alt="" data-aid="${a.id}" src="${AVA[a.id]}"><span class="who"><span class="nm">${a.name}<small>${a.short}</small></span><span class="st" data-st="${a.id}">—</span></span></button>`).join('');
+  for (const a of ALL_AG){ const cv = document.createElement('canvas'); renderAvatarSized(a.id, cv); AVA[a.id] = cv.toDataURL(); }
+  $('#crew').innerHTML = ALL_AG.map(a=>`<button type="button" data-agent="${a.id}" aria-pressed="false" style="--c:${a.color}"><img class="ava" alt="" data-aid="${a.id}" src="${AVA[a.id]}"><span class="who"><span class="nm">${a.name}<small>${a.short}</small></span><span class="st" data-st="${a.id}">—</span></span></button>`).join('');
   $$('#crew button').forEach(b=>b.addEventListener('click', ()=>selectAgent(b.dataset.agent)));
   $('#filters').innerHTML = FILTERS.map(([k,l])=>`<button type="button" data-f="${k}" aria-pressed="${k==='all'}">${l}</button>`).join('');
   $$('#filters button').forEach(b=>b.addEventListener('click', ()=>{ feedFilter = b.dataset.f; $$('#filters button').forEach(x=>x.setAttribute('aria-pressed', x===b)); renderFeed(); }));
@@ -175,7 +175,7 @@ function updateUI(){
   setPnl($('#kTot'), tot, pf.startEquity ? tot/pf.startEquity : 0);
   $('#kPos').textContent = `${pf.positions.length} из ${S.params.maxPos || '—'}`;
   $('#kTime').textContent = fmtTime(nowMs(), true);
-  for (const a of AG_LIST){
+  for (const a of ALL_AG){
     const el = document.querySelector(`[data-st="${a.id}"]`); if (!el) continue;
     if (el.textContent !== a.status) el.textContent = a.status;
     const busy = a.actions.length && a.actions[0].type==='work', walk = !a.seated;
@@ -579,6 +579,7 @@ function onReset(){
 // ---------- карточка агента ----------
 function kpisFor(id){
   const st = S.stats || {};
+  if (id==='boss'){ const eq = equity(), tot = eq - (S.pf.startEquity || eq); return [['Капитал', fmtUSD(eq)], ['С начала', `<span class="${tot>=0?'up':'down'}">${fmtUSD(tot,true)}</span>`], ['Позиций', String(S.pf.positions.length)]]; }
   const g = (o,k)=> (o && o[k]) || 0;
   if (id==='nika') return [['Сводок', g(st.nika,'briefs')], ['Новостей', g(st.nika,'news')], ['Надёжных', g(st.nika,'news') ? Math.round(g(st.nika,'reliable')/g(st.nika,'news')*100)+'%' : '—']];
   if (id==='boris') return [['Оценок', g(st.boris,'evals')], ['Одобрено', g(st.boris,'ok') + (g(st.boris,'caution')?` +${g(st.boris,'caution')}`:'')], ['Отклонено', g(st.boris,'reject')]];
@@ -587,6 +588,13 @@ function kpisFor(id){
   return [['Ордеров', g(st.aliya,'orders')], ['Винрейт', pf.closedCount ? Math.round(pf.wins/pf.closedCount*100)+'%' : '—'], ['P&L сделок', `<span class="${(pf.realized||0)>=0?'up':'down'}">${fmtUSD(pf.realized||0,true)}</span>`]];
 }
 function workFor(id){
+  if (id==='boss'){
+    const rows = AG_LIST.map(a=>`<tr><td><b>${a.name}</b><br><small style="color:var(--faint)">${esc(a.short)}</small></td><td>${esc(a.status)}</td></tr>`).join('');
+    const st = S.strat, nm = {trend:'Тренд', carry:'Фандинг-арбитраж', mr:'Возврат к среднему'};
+    const strat = st && st.alloc ? `<div class="sec">Стратегии</div><ul class="duties">${['trend','carry','mr'].map(k=>`<li><b>${nm[k]}</b> — ${Math.round((st.alloc[k]||0)*100)}% капитала${st.paperPnl && st.paperPnl[k] != null ? `, ${fmtUSD(st.paperPnl[k], true)} на виртуальном` : ''}</li>`).join('')}</ul>` : '';
+    const rv = S.review && S.review.reviews && S.review.reviews.find(r=>!r.error);
+    return `<table class="tbl"><thead><tr><th>Команда</th><th>Сейчас</th></tr></thead><tbody>${rows}</tbody></table>${strat}${rv ? `<div class="sec">Последний разбор</div><p class="revsum">${esc(rv.summary||'')}</p>` : ''}`;
+  }
   if (id==='nika'){
     const b = S.brief; if (!b) return `<div class="empty">Сводок ещё нет.</div>`;
     const rows = [...b.items].sort((p,q)=>Math.abs(q.score)-Math.abs(p.score)).map(i=>`<tr><td><b class="mono">${i.sym}</b>${b.hot.includes(i.sym)?' <span class="pill" style="background:#3a2610;color:#ffcf8a">идея</span>':''}</td><td>${i.label}</td><td class="num ${i.sent>0.15?'up':i.sent<-0.15?'down':''}">${i.sent>=0?'+':'−'}${Math.abs(i.sent).toFixed(2)}</td><td class="num ${i.score>0?'up':'down'}">${i.score>=0?'+':'−'}${Math.abs(i.score).toFixed(2)}</td></tr>`).join('');
@@ -605,6 +613,7 @@ function workFor(id){
   return `<table class="tbl"><thead><tr><th>Время</th><th>Ордер</th></tr></thead><tbody>${o.map(r=>`<tr><td class="mono" style="color:var(--faint)">${fmtTime(r.ts)}</td><td>${esc(r.text)}</td></tr>`).join('')}</tbody></table>`;
 }
 const CONTROLS = {
+  boss:[],
   nika:[{k:'rumorTrust', label:'Доверие к слухам', min:0.3, max:1.6, step:0.1, fmt:v=>`×${(+v).toFixed(1)}`, hint:'Вес новостей из источников с надёжностью ниже 50%.'}],
   boris:[{k:'riskPct', label:'Риск на сделку', min:0.25, max:3, step:0.25, fmt:v=>`${(+v).toFixed(2)}% капитала`, hint:'Сколько капитала теряется, если сработает стоп.'},
          {k:'rr', label:'Тейк к стопу', min:1.2, max:3.5, step:0.1, fmt:v=>`${(+v).toFixed(1)} : 1`, hint:'Во сколько раз цель дальше стопа.'}],
@@ -620,15 +629,15 @@ function buildAgentPanel(){
   const ctl = CONTROLS[id].map(c=> c.bool
     ? `<div class="ctl"><label for="p_${c.k}">${c.label}</label><label class="switch"><input type="checkbox" id="p_${c.k}" data-pk="${c.k}" ${S.params[c.k]?'checked':''}></label><div class="hint">${c.hint}</div></div>`
     : `<div class="ctl"><label for="p_${c.k}">${c.label}</label><output id="o_${c.k}">${c.fmt(S.params[c.k])}</output><input type="range" id="p_${c.k}" data-pk="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${S.params[c.k]}"><div class="hint">${c.hint}</div></div>`).join('');
-  const quick = {nika:['Что сейчас на рынке?','Какой новости ты не доверяешь?','Какая монета самая горячая?'], boris:['Какие риски видишь?','Почему отклонил последнюю идею?','Не перегружен ли портфель?'], timur:['Почему такой сигнал?','Что нужно для сигнала по BTC?','Какой порог ты бы поставил?'], aliya:['Как дела у счёта?','Что с открытыми позициями?','Какая сделка была лучшей?']}[id];
-  const acc = {nika:'Рустама', boris:'Аки', timur:'Нода', aliya:'Артура'}[id], ins = {nika:'Рустамом', boris:'Аки', timur:'Нодом', aliya:'Артуром'}[id];
+  const quick = {boss:['Как дела у офиса?','Что сейчас на реальном счёте?','Какая стратегия приносит результат?'], nika:['Что сейчас на рынке?','Какой новости ты не доверяешь?','Какая монета самая горячая?'], boris:['Какие риски видишь?','Почему отклонил последнюю идею?','Не перегружен ли портфель?'], timur:['Почему такой сигнал?','Что нужно для сигнала по BTC?','Какой порог ты бы поставил?'], aliya:['Как дела у счёта?','Что с открытыми позициями?','Какая сделка была лучшей?']}[id];
+  const acc = {nika:'Рустама', boris:'Аки', timur:'Нода', aliya:'Артура', boss:'Джаму'}[id], ins = {nika:'Рустамом', boris:'Аки', timur:'Нодом', aliya:'Артуром', boss:'Джамой'}[id];
   const ai = CFGC.ai
     ? `<div class="chat" id="chatLog"></div><div class="quick" id="quick">${quick.map(q=>`<button type="button">${esc(q)}</button>`).join('')}</div><form class="chatform" id="chatForm"><input id="chatIn" aria-label="Вопрос агенту" type="text" maxlength="400" placeholder="Спросите ${acc} о работе" autocomplete="off"><button class="btn btn-accent" type="submit" id="chatSend">Спросить</button></form>`
     : `<div class="ainote">Разговор с агентом включится, когда на сервере будет задан ANTHROPIC_API_KEY.</div>`;
   el.innerHTML = `<div class="ahead" style="--c:${a.color}"><img class="ava" alt="" data-aid="${id}" src="${AVA[id]}"><div><h2>${a.name}</h2><p class="role">${a.role}</p><p class="now" id="aNow">${esc(a.status)}</p></div></div>
     <ul class="duties">${a.duties.map(d=>`<li>${d}</li>`).join('')}</ul>
     <div class="kgrid" id="aK" style="margin-top:10px"></div>
-    <div class="sec">Настройки<span class="note" id="profNote">профиль: ${S.profile==='custom'?'свой':(PROFILES[S.profile]||{label:''}).label.toLowerCase()}</span></div>${ctl}
+    ${ctl ? `<div class="sec">Настройки<span class="note" id="profNote">профиль: ${S.profile==='custom'?'свой':(PROFILES[S.profile]||{label:''}).label.toLowerCase()}</span></div>${ctl}` : ''}
     <div class="sec">Последняя работа</div><div id="aWork"></div>
     <div class="sec">Разговор с ${ins}<span class="note">через Claude</span></div>${ai}`;
   $$('[data-pk]', el).forEach(inp=>{
@@ -652,7 +661,7 @@ function updateAgentPanel(){
 }
 function renderChat(id){
   const log = $('#chatLog'); if (!log) return; const a = AG[id];
-  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Аки. Считаю риски и режу лишнее. Спрашивайте.', timur:'Нод на связи. Могу объяснить любой сигнал и порог.', aliya:'Артур. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
+  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({boss:'Джама. Отвечаю за результат офиса. Спрашивайте.', nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Аки. Считаю риски и режу лишнее. Спрашивайте.', timur:'Нод на связи. Могу объяснить любой сигнал и порог.', aliya:'Артур. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
   log.innerHTML = CHATS[id].map(m=>`<div class="bub ${m.role==='user'?'me':'ai'}${m.err?' err':''}" style="--c:${a.color}">${esc(m.content)}</div>`).join('');
 }
 function sendChat(id, text){
