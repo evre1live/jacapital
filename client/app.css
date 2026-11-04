@@ -336,11 +336,11 @@ select:hover{background-color:var(--fill-2)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* живой режим */
-.conn{max-width:260px;font-size:12px;font-weight:500;padding:5px 11px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-flex;align-items:center;gap:6px;--t:var(--warn);background:color-mix(in srgb,var(--t) 14%,transparent);color:color-mix(in srgb,var(--t) 78%,var(--text))}
-.conn::before{content:"";width:7px;height:7px;border-radius:50%;flex:none;background:var(--t)}
+.conn{width:12px;height:12px;flex:none;border-radius:50%;padding:0;border:0;cursor:pointer;font-size:0;--t:var(--down);background:radial-gradient(circle at 35% 30%,color-mix(in srgb,#fff 55%,var(--t)) 0 22%,var(--t) 60%);box-shadow:0 0 0 3px color-mix(in srgb,var(--t) 18%,transparent),0 0 10px color-mix(in srgb,var(--t) 70%,transparent)}
 .conn.ok{--t:var(--up)}
-.conn.warn{--t:var(--warn)}
-.conn.bad{--t:var(--down);white-space:normal;max-width:340px;border-radius:14px}
+.conn.bad{--t:var(--down);animation:connPulse 1.6s ease-in-out infinite}
+@keyframes connPulse{50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--t) 10%,transparent),0 0 4px color-mix(in srgb,var(--t) 40%,transparent)}}
+@media (prefers-reduced-motion: reduce){ .conn.bad{animation:none} }
 a.btn{text-decoration:none}
 .loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--scrim);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);z-index:4;text-align:center;padding:20px}
 .loading[hidden]{display:none}
@@ -403,3 +403,11 @@ html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,
 .realctl .btn.on{background:var(--accent);color:var(--accent-ink,#fff);border-color:var(--accent)}
 .realctl .btn-no{margin-left:auto}
 .watch{max-height:min(56vh,620px);overflow-y:auto;overscroll-behavior:contain;padding:2px 3px 2px 0}
+
+/* руководитель: уровни проверок и поручения */
+.lv{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px;background:var(--faint)}
+.lv.ok{background:var(--up)} .lv.warn{background:var(--warn)} .lv.bad{background:var(--down)} .lv.off{background:color-mix(in srgb,var(--faint) 50%,transparent)}
+td .lv{margin-right:6px}
+.acctst.warn{--t:var(--warn)}
+.btask{margin-top:12px;padding:9px 11px;border-radius:12px;font-size:12.5px;line-height:1.4;background:color-mix(in srgb,#8e3047 9%,transparent);box-shadow:inset 3px 0 0 #8e3047}
+.btask b{color:color-mix(in srgb,#8e3047 70%,var(--text))}

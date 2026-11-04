@@ -12,7 +12,7 @@ const AGENTS = {
   boris: {name: 'Аки', role: 'риск-менеджер сделок',        persona: 'осторожный педант с сухим юмором, мыслит стопами и размером риска'},
   timur: {name: 'Нод', role: 'стратег сигналов',            persona: 'уверенный, говорит процентами уверенности и порогами'},
   aliya: {name: 'Артур',  role: 'трейдер-исполнитель',         persona: 'собранный и лаконичный, отчитывается ордерами и результатом в долларах'},
-  boss:  {name: 'Джама',  role: 'руководитель офиса',          persona: 'спокойный и требовательный, смотрит на общий результат, стратегии, риск и дисциплину команды; говорит коротко и по делу'},
+  boss:  {name: 'Джама',  role: 'руководитель офиса',          persona: 'спокойный и требовательный; главная задача — контролировать работу агентов, проводить планёрки, обсуждать стратегии и улучшать показатели; говорит коротко и по делу, опирается на проверки команды, показатели и поручения (раздел boss в данных)'},
 };
 const freshStats = () => ({nika: {news: 0, briefs: 0, reliable: 0}, boris: {evals: 0, ok: 0, caution: 0, reject: 0}, timur: {signals: 0, confSum: 0, closes: 0, below: 0}, aliya: {orders: 0, skips: 0, errors: 0}});
 
@@ -520,6 +520,7 @@ export class Office extends EventEmitter {
       pending_approvals: st.pending.map(p => ({coin: p.sym, side: sideRu(p.dir), confidence: p.conf})),
       recent_trades: cl.slice(0, 6).map(c => ({coin: c.sym, side: sideRu(c.dir), pnl: r2(c.pnl), reason: c.reason, strategy: c.strategy || 'legacy'})),
       strategies: this.extra ? (({strat}) => strat ? {alloc: strat.alloc, status: strat.status, paper_pnl: strat.paperPnl, real_account: strat.real, risk: strat.risk} : null)(this.extra()) : null,
+      boss: this.bossInfo ? this.bossInfo() : null,
     };
   }
   async chat(agent, turns){
@@ -535,23 +536,6 @@ export class Office extends EventEmitter {
     this.post(agent, 'you', text, 'chat');
     return text;
   }
-  async meeting(){
-    const lines = Object.entries(AGENTS).map(([k, a]) => `- ${a.name} — ${a.role} (${a.persona});`).join('\n');
-    const prompt = `Проведи короткую планёрку в офисе крипто-трейдинга JA Capital (реальные котировки; счёт: ${this.venue()}). Агенты:
-${lines}
-Джама — руководитель: говорит последним и подводит итог для команды. Каждый агент говорит одну реплику от первого лица, по-русски, до 30 слов, строго по данным ниже: что видит и что предлагает. Затем общий итог до 40 слов и рекомендация профиля риска: cautious, balanced или aggressive, с причиной до 20 слов. Не обещай доходность.
-Ответь только JSON такого вида:
-{"nika":"…","boris":"…","timur":"…","aliya":"…","boss":"…","summary":"…","profile":"balanced","profileWhy":"…"}
-Состояние офиса (JSON):
-${JSON.stringify(this.snapshot())}`;
-    const d = await askJSON({prompt, fast: false, maxTokens: 900, kind: 'meeting'});
-    for (const k of Object.keys(AGENTS)) if (typeof d[k] === 'string' && d[k].trim()) this.post(k, 'office', d[k].trim(), 'meet');
-    const prof = B.PROFILES[d.profile] ? d.profile : null;
-    if (d.summary) this.post('system', null, `Итог планёрки: ${String(d.summary).trim()}${prof ? ` Рекомендация: профиль «${B.PROFILES[prof].label}» — ${String(d.profileWhy || '').trim()}` : ''}`, 'meet');
-    this.touch();
-    return {...d, profile: prof};
-  }
-
   // ---------- для клиентов ----------
   publicState(){
     const st = this.state, pf = st.pf;

@@ -51,7 +51,8 @@ export class Reviewer {
     const limits = Object.fromEntries(Object.entries(PROPOSABLE).map(([s, ps]) => [s, Object.fromEntries(ps.map(p => [p, {name: paramName(s, p), now: st.strat.params[s][p], min: PARAM_SPACE[s][p][0], max: PARAM_SPACE[s][p][1]}]))]));
     return {now: new Date().toISOString(), books, trades, strategies: {alloc: st.strat.alloc, status: st.strat.status, paper_pnl_since_start: eng.dailyPnl(), testing_since: new Date(st.strat.since).toISOString().slice(0, 10)},
       parameters: limits, backtest: bt, market: eng.publicView ? {trend: eng.publicView().trend, funding_apr_7d: eng.publicView().carry, risk: eng.view ? eng.view.risk : null} : null,
-      recent_changes: this.j.changes.slice(0, 12).map(c => ({ts: new Date(c.ts).toISOString().slice(0, 10), strategy: c.strategy, param: c.param, from: c.from, to: c.to, status: c.status, why: c.verdictWhy}))};
+      recent_changes: this.j.changes.slice(0, 12).map(c => ({ts: new Date(c.ts).toISOString().slice(0, 10), strategy: c.strategy, param: c.param, from: c.from, to: c.to, status: c.status, why: c.verdictWhy})),
+      boss_agenda: this.agenda ? this.agenda() : null};
   }
 
   // ---------- ежедневный разбор ----------
@@ -70,6 +71,7 @@ export class Reviewer {
 - Прежняя логика агентов (strategy = legacy, 5-минутные сделки) уже выключена как убыточная; её сделки разбирай как уроки, поправок для неё не предлагай.
 - Поправки — только из списка parameters, в пределах min…max, не больше трёх, по одной на параметр. Каждая будет автоматически проверена на истории с 2021 года, за последний год и за последние 90 дней и применена, только если улучшит результат; через 14 дней её перепроверят на новых данных и откатят, если она хуже. Поэтому лучше не предлагать ничего, чем предлагать слабое.
 - Не повторяй поправки, отклонённые за последние 14 дней (recent_changes).
+- boss_agenda — вопросы руководителя офиса Джамы с последней планёрки: ответь на них в summary или mistakes, если данные позволяют.
 - Пиши по-русски, коротко и конкретно.
 Ответь только JSON:
 {"summary":"2–4 предложения: что произошло и почему","mistakes":[{"title":"…","evidence":"цифры из данных","cost_usd":число или null,"lesson":"что делать иначе"}],"proposals":[{"strategy":"trend|carry|mr|risk","param":"…","value":число,"why":"…"}],"watch":["что отслеживать"]}`;

@@ -800,7 +800,7 @@ const O3 = (()=>{
       c.strokeStyle = '#a8864e'; c.lineWidth = 10; c.strokeRect(34, 34, w - 68, h - 68); c.lineWidth = 3; c.strokeRect(58, 58, w - 116, h - 116);
       c.strokeStyle = 'rgba(168,134,78,.35)'; c.lineWidth = 2; for (let k = 1; k < 6; k++){ c.beginPath(); c.moveTo(58 + k*(w - 116)/6, 58); c.lineTo(58 + k*(w - 116)/6, h - 58); c.stroke(); } });
     const rm = std('#ffffff', {map:rugTex, roughness:1});
-    for (const [x0, yy0, w, h] of [[66, y0 + 44, 140, 110], [284, y0 + 34, 136, 78]]){ const r = new THREE.Mesh(new THREE.PlaneGeometry(w, h), rm); r.rotation.x = -Math.PI/2; r.position.set(x0 + w/2, 0.16, yy0 + h/2); r.receiveShadow = true; put(r); }
+    for (const [x0, yy0, w, h] of [[62, y0 + 8, 146, 118], [284, y0 + 34, 136, 78]]){ const r = new THREE.Mesh(new THREE.PlaneGeometry(w, h), rm); r.rotation.x = -Math.PI/2; r.position.set(x0 + w/2, 0.16, yy0 + h/2); r.receiveShadow = true; put(r); }
     boxAt(30, y0 + 170, 0, 24, 24, 15, M.dark, 0.6); boxAt(29, y0 + 169, 14.4, 26, 26, 0.8, M.brass, 0.3);
     { const r = new THREE.Mesh(new THREE.CircleGeometry(1, 80), rm); r.rotation.x = -Math.PI/2; r.scale.set(46, 46, 1); r.position.set(330, 0.16, y0 + 160); r.receiveShadow = true; put(r); }
     // экран на левой стене: капитал, результат и доли стратегий
@@ -810,8 +810,8 @@ const O3 = (()=>{
     // табличка на столе руководителя
     const nm = canvasTex(512, 96, (c, w, h)=>{ const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#e8cd88'); g.addColorStop(1, '#a6823a'); c.fillStyle = g; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(70,45,10,.6)'; c.lineWidth = 4; c.strokeRect(4, 4, w - 8, h - 8); c.font = `700 46px ${FONT}`; c.fillStyle = '#2a1a10'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('Джама', w/2, h/2 + 2); });
     DYN.bossPlate = new THREE.Mesh(new THREE.PlaneGeometry(22, 4.2), std('#ffffff', {map:nm, roughness:0.3, metalness:0.4})); DYN.bossPlate.visible = false; put(DYN.bossPlate);
-    CUR = GRP.pendants; for (const [px, py, pz] of [[BOSS_DESK.x - 20, BOSS_DESK.y + 4, 66], [BOSS_DESK.x + 20, BOSS_DESK.y + 4, 66], [330, y0 + 160, 64]]) PENDANT_MAKE(px, py, pz);
-    LAMPS.push([BOSS_DESK.x + 32, BOSS_DESK.y - 6, 36, 'desk'], [412, y0 + 18, 49, 'floor']);
+    CUR = GRP.pendants; for (const [px, py, pz] of [[BOSS_DESK.x - 20, BOSS_DESK.y - 4, 66], [BOSS_DESK.x + 20, BOSS_DESK.y - 4, 66], [330, y0 + 160, 64]]) PENDANT_MAKE(px, py, pz);
+    LAMPS.push([BOSS_DESK.x + 32, BOSS_DESK.y + 6, 36, 'desk'], [412, y0 + 18, 49, 'floor']);
     CUR = null;
   }
   // экран руководителя: капитал счёта, результат за день и с начала, доли стратегий
@@ -1380,20 +1380,22 @@ const O3 = (()=>{
   const CY = FD;   // начало кабинета по Y
   const CAB_MEET = {x:330, y:FD + 160};
   const CAB_PROPS = [
-    {file:'mh_cab_desk', pbr:true, clearcoat:0.3, tint:'#9a8778', places:[{hide:[], cx:BOSS_DESK.x, cy:BOSS_DESK.y, w:BOSS_DESK.w, d:BOSS_DESK.d, h:24.5, rot:Math.PI/2, after:(i)=>{
-      const pl = DYN.bossPlate; if (pl){ pl.position.set(BOSS_DESK.x, i.top - 4.5, BOSS_DESK.y + BOSS_DESK.d/2 + 0.25); pl.visible = true; } }}]},
-    {file:'mh_cab_chair', pbr:true, places:[{hide:[], cx:BOSS_SEAT.x, cy:BOSS_SEAT.y - 2, h:31, uniform:true, rot:-Math.PI/2}]},
-    {file:'mh_cab_guest', pbr:true, places:[{hide:[], cx:BOSS_DESK.x - 22, cy:BOSS_DESK.y + 40, h:22, uniform:true, rot:Math.PI/2 + 0.12}, {hide:[], cx:BOSS_DESK.x + 22, cy:BOSS_DESK.y + 40, h:22, uniform:true, rot:Math.PI/2 - 0.12}]},
+    // стол развёрнут к перегородке: руководитель сидит лицом к команде, гости — спиной к стеклу
+    {file:'mh_cab_desk', pbr:true, clearcoat:0.3, tint:'#9a8778', places:[{hide:[], cx:BOSS_DESK.x, cy:BOSS_DESK.y, w:BOSS_DESK.w, d:BOSS_DESK.d, h:24.5, rot:-Math.PI/2, after:(i)=>{
+      const pl = DYN.bossPlate; if (pl){ pl.position.set(BOSS_DESK.x, i.top - 4.5, BOSS_DESK.y - BOSS_DESK.d/2 - 0.25); pl.rotation.y = Math.PI; pl.visible = true; } }}]},
+    {file:'mh_cab_chair', pbr:true, places:[{hide:[], cx:BOSS_SEAT.x, cy:BOSS_SEAT.y + 2, h:31, uniform:true, rot:Math.PI/2}]},
+    {file:'mh_cab_guest', pbr:true, places:[{hide:[], cx:BOSS_DESK.x - 22, cy:BOSS_DESK.y - 40, h:22, uniform:true, rot:-Math.PI/2 - 0.12}, {hide:[], cx:BOSS_DESK.x + 22, cy:BOSS_DESK.y - 40, h:22, uniform:true, rot:-Math.PI/2 + 0.12}]},
     {file:'mh_cab_coffee', pbr:true, clearcoat:0.5, places:[{hide:[], cx:352, cy:CY + 66, w:42, d:22, h:10, rot:0}]},
     {file:'mh_cab_books', pbr:true, tint:'#9a8778', places:[{hide:[], cx:7.6, cy:CY + 150, d:66, uniform:'d', rot:0}]},
     {file:'mh_sofa', pbr:true, places:[{hide:[], cx:352, cy:CY + 26, w:74, uniform:'w', rot:-Math.PI/2}]},
     {file:'mh_lounge', pbr:true, places:[{hide:[], cx:306, cy:CY + 68, h:27, uniform:true, rot:0.15}, {hide:[], cx:398, cy:CY + 68, h:27, uniform:true, rot:Math.PI - 0.15}]},
     {file:'mh_floorlamp', pbr:true, places:[{hide:[], cx:412, cy:CY + 18, h:54, uniform:true, rot:-Math.PI/2}]},
-    {file:'mh_credenza', pbr:true, clearcoat:0.2, places:[{hide:[], cx:BOSS_DESK.x, cy:CY + 9, w:80, uniform:'w', rot:-Math.PI/2}]},
-    {file:'mh_vase', pbr:true, places:[{hide:[], cx:BOSS_DESK.x + 30, cy:CY + 9, z:17.5, h:18, uniform:true, rot:0.4}]},
-    {file:'mh_lamp', pbr:true, places:[{hide:[], cx:BOSS_DESK.x + 33, cy:BOSS_DESK.y - 7, z:24.5, h:14, uniform:true, rot:Math.PI}]},
-    {file:'mh_monitor', pbr:true, places:[{hide:[], cx:BOSS_DESK.x - 6, cy:BOSS_DESK.y - 5, z:24.5, h:14, uniform:true, rot:Math.PI/2}]},
-    {file:'mh_barcart', pbr:true, places:[{hide:[], cx:13, cy:CY + 62, h:22, uniform:true, rot:0}]},
+    // тумба — у левой стены под экраном, тележка-бар — в зоне отдыха
+    {file:'mh_credenza', pbr:true, clearcoat:0.2, places:[{hide:[], cx:10, cy:CY + 66, d:80, uniform:'d', rot:0}]},
+    {file:'mh_vase', pbr:true, places:[{hide:[], cx:10, cy:CY + 94, z:17.5, h:18, uniform:true, rot:0.4}]},
+    {file:'mh_lamp', pbr:true, places:[{hide:[], cx:BOSS_DESK.x + 33, cy:BOSS_DESK.y + 7, z:24.5, h:14, uniform:true, rot:0}]},
+    {file:'mh_monitor', pbr:true, places:[{hide:[], cx:BOSS_DESK.x - 6, cy:BOSS_DESK.y + 5, z:24.5, h:14, uniform:true, rot:-Math.PI/2}]},
+    {file:'mh_barcart', pbr:true, places:[{hide:[], cx:418, cy:CY + 126, h:22, uniform:true, rot:Math.PI}]},
     {file:'mh_plant_fig', pbr:true, places:[{hide:[], cx:16, cy:CY + 16, h:46, uniform:true, rot:1.3}]},
     {file:'mh_plant_snake', pbr:true, places:[{hide:[], cx:22, cy:CY + 192, h:24, uniform:true, rot:0.7}]},
     {file:'mh_plant_monstera', pbr:true, places:[{hide:[], cx:418, cy:CY + 190, h:24, uniform:true, rot:1.9}]},
@@ -1534,7 +1536,7 @@ const O3 = (()=>{
   function setRot(g, x=0, y=0, z=0){ g.rotation.set(x, y, z); }
   function poseFigure(a, f, t, dt){
     if (a.walking){ const dx = a.x - f.lastX, dy = a.y - f.lastY; if (Math.hypot(dx, dy) > 0.001) f.targetYaw = Math.atan2(dx, dy); }
-    else if (a.seated) f.targetYaw = 0;
+    else if (a.seated) f.targetYaw = FACE_YAW[a.sitFace || 'SW'];
     else if (FACE_YAW[a.facing] != null) f.targetYaw = FACE_YAW[a.facing];
     f.lastX = a.x; f.lastY = a.y;
     f.yaw = lerpAngle(f.yaw, f.targetYaw, 1 - Math.exp(-dt*9));

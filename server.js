@@ -12,6 +12,7 @@ import ccxt from 'ccxt';
 import {loadAll, summaryLines, BT_VERSION} from './src/backtest.js';
 import {Engine, STRATS} from './src/engine.js';
 import {Reviewer} from './src/review.js';
+import {Boss} from './src/boss.js';
 import {resolveUniverse, universeVolumes} from './src/universe.js';
 import {symbolFor} from './src/exchange.js';
 import {Market} from './src/market.js';
@@ -53,7 +54,7 @@ detectIp();
 const data = makeData(CFG);
 const market = new Market(data, CFG);
 const accounts = makeAccounts(CFG, data);
-let office = null, news = null, engine = null, reviewer = null;
+let office = null, news = null, engine = null, reviewer = null, boss = null;
 
 // ---------- HTTP ----------
 const PUBLIC = path.join(__dirname, 'public');
@@ -114,7 +115,7 @@ function coinsPayload(full){
 }
 wss.on('connection', ws => {
   if (!office){ sendTo(ws, {t: 'loading', status: market.status}); }
-  else { sendTo(ws, {t: 'hello', cfg: cfgPublic(), state: office.publicState(), feed: office.state.feed.slice(0, 120), coins: coinsPayload(true), now: Date.now()}); sendTo(ws, {t: 'backtest', bt: btPublic(true)}); if (reviewer) sendTo(ws, {t: 'review', review: reviewer.publicView()}); }
+  else { sendTo(ws, {t: 'hello', cfg: cfgPublic(), state: office.publicState(), feed: office.state.feed.slice(0, 120), coins: coinsPayload(true), now: Date.now()}); sendTo(ws, {t: 'backtest', bt: btPublic(true)}); if (reviewer) sendTo(ws, {t: 'review', review: reviewer.publicView()}); if (boss) sendTo(ws, {t: 'boss', boss: boss.publicView()}); }
   ws.on('message', async raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!office) return;
@@ -176,9 +177,10 @@ wss.on('connection', ws => {
           break;
         }
         case 'meeting': {
-          broadcast({t: 'meetStart'});
-          try { const d = await office.meeting(); broadcast({t: 'meeting', data: d}); }
-          catch (e) { broadcast({t: 'meeting', error: e.code === 'no_key' ? 'На сервере не задан ANTHROPIC_API_KEY — планёрка выключена.' : e.message}); }
+          // планёрку ведёт Джама; без Claude она проходит по правилам, по данным проверок
+          if (!boss) break;
+          if (boss.running){ sendTo(ws, {t: 'toast', text: 'Планёрка уже идёт'}); break; }
+          boss.meeting('по просьбе владельца', {manual: true}).catch(() => {});
           break;
         }
       }
@@ -315,6 +317,12 @@ async function start(){
   engine = new Engine({office, market, CFG});
   reviewer = new Reviewer({office, engine, CFG, validate: validateChange});
   reviewer.btSummary = btSummary; reviewer.onTrendChange = () => retrainModel();
+  boss = new Boss({office, engine, market, reviewer, CFG, btSummary});
+  office.bossInfo = () => boss.brief(); reviewer.agenda = () => boss.agenda();
+  boss.on('meetStart', why => broadcast({t: 'meetStart', why}));
+  boss.on('meeting', m => broadcast({t: 'meeting', ...m}));
+  boss.on('visit', v => broadcast({t: 'bossVisit', ...v}));
+  boss.on('update', () => broadcast({t: 'boss', boss: boss.publicView()}));
   office.extra = () => ({strat: engine.publicView()});
   if (BT.res && BT.res.pick && !office.state.strat.btCheck) applyBacktest(BT.res);
   news = new News(CFG, office.state, () => office.ctx.id());
@@ -384,6 +392,8 @@ async function start(){
   setInterval(() => { const d = new Date(); if (d.getUTCHours() === 4 && d.getUTCMinutes() >= 30 && d.getUTCMinutes() < 32 && reviewDue() && !reviewer.running && aiEnabled()) reviewer.run().catch(() => {}); }, 60000);
   setTimeout(() => { if (reviewDue() && aiEnabled() && !reviewer.running) reviewer.run('после запуска сервера').catch(() => {}); }, 8 * 60000);
   setInterval(() => { try { evaluateGate(); } catch (e) { console.warn('[gate]', e.message); } }, 6 * 36e5);
+  // руководитель: проверки команды, обходы и планёрки
+  setInterval(() => { try { boss.tick(); } catch (e) { console.warn('[boss]', e.message); } }, 60000);
   // бэктест в фоне: при первом запуске и раз в неделю
   if (process.env.BACKTEST !== 'off' && (!BT.res || Date.now() - BT.res.ts > 7 * 864e5)) setTimeout(() => runBacktestBg(BT.res ? 'прошла неделя' : 'первый запуск'), 20000);
 }

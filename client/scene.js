@@ -37,13 +37,14 @@ AGENT_DEFS.forEach((d,i)=>{
 const AG_LIST = AGENT_DEFS.map(d=>AG[d.id]);
 // ---------- кабинет руководителя: такое же помещение перед офисом, за стеклянной перегородкой ----------
 const CAB = {y0:FD, y1:FD*2, doorX:266, doorW:34};
-const BOSS_DESK = {x:135, y:292, w:84, d:36};
-const BOSS_SEAT = {x:135, y:266};
+// стол стоит лицом к перегородке: Джама сидит за ним спиной к фасаду и видит, как работает команда
+const BOSS_DESK = {x:135, y:262, w:84, d:36};
+const BOSS_SEAT = {x:135, y:300};
 const BOSS_DEF = {id:'boss', name:'Джама', role:'Руководитель офиса', short:'Руководитель', color:'#8e3047',
   look:{skin:'#e0a983', hair:'#e0a983', hairL:'#e9b893', shirt:'#5a1a2a', shirtL:'#7a2a3c', shirtD:'#3e1019', pants:'#4e1724', shoes:'#141414', iris:'#3b2618', style:'bald', acc:'', mug:'#ffffff'},
-  duties:['Отвечает за результат офиса и дисциплину риска','Следит за командой из кабинета через стеклянную перегородку','Приходит на планёрки и подводит итог']};
-AG.boss = Object.assign({}, BOSS_DEF, {fem:false, i:4, dx:BOSS_DESK.x, sx:BOSS_SEAT.x, sy:BOSS_SEAT.y, ax:BOSS_SEAT.x+52, x:BOSS_SEAT.x, y:BOSS_SEAT.y, facing:'SW', seated:true, actions:[], queue:[], job:null,
-  status:'В кабинете', bubble:null, emote:null, typing:false, phase:0, jumpT:0, armsUp:0, idle:0, nextIdle:rnd(14,26), cup:false, holdCup:false, carry:false,
+  duties:['Контролирует работу команды: данные Рустама, риск Аки, сигналы Нода, исполнение Артура','Проводит планёрки: каждое утро и сразу, если что-то пошло не так; раздаёт поручения и проверяет их','Разбирает стратегии и добивается лучших показателей — поправки принимаются, только если лучше на истории']};
+AG.boss = Object.assign({}, BOSS_DEF, {fem:false, i:4, dx:BOSS_DESK.x, sx:BOSS_SEAT.x, sy:BOSS_SEAT.y, ax:BOSS_SEAT.x+52, x:BOSS_SEAT.x, y:BOSS_SEAT.y, facing:'NE', sitFace:'NE', seated:true, actions:[], queue:[], job:null,
+  status:'Следит за командой', bubble:null, emote:null, typing:false, phase:0, jumpT:0, armsUp:0, idle:0, nextIdle:rnd(14,26), cup:false, holdCup:false, carry:false,
   plan:{x:BOSS_SEAT.x, y:BOSS_SEAT.y}, exitPath:null, blinkAt:rnd(1,4), walkStatus:null, boss:true});
 const BOSS = AG.boss;
 const ALL_AG = [...AG_LIST, BOSS];
@@ -55,7 +56,7 @@ function bossIdle(a){
   const r = rand();
   if (r < 0.45){
     // подходит к стеклу и смотрит, как работает команда
-    const x = [60, 205, 230, 298][Math.floor(rand()*4)], pts = x > CAB.doorX ? [[CAB.doorX + 30, CAB.y0 + 36], [x, CAB.y0 + 14]] : [[x, CAB.y0 + 14]];
+    const x = [205, 228, 300, 332][Math.floor(rand()*4)], pts = x > CAB.doorX ? [[CAB.doorX + 30, CAB.y0 + 36], [x, CAB.y0 + 14]] : [[x, CAB.y0 + 14]];
     bossWalk(a, pts, 'Идёт к стеклу'); act(a, {type:'face', dir:'NE'});
     act(a, {type:'wait', dur:rnd(5,9), status:'Смотрит, как работает команда'}); bossBack(a, pts);
   } else if (r < 0.75){
@@ -63,6 +64,20 @@ function bossIdle(a){
     const pts = [[BOSS_AISLE.x, CAB.y0 + 150], [26, CAB.y0 + 150]];
     bossWalk(a, pts, 'Идёт к стеллажу'); act(a, {type:'face', dir:'NW'}); act(a, {type:'wait', dur:rnd(3,5), status:'Ищет отчёт'}); bossBack(a, pts);
   } else a.armsUp = 1.1;
+}
+// обход: Джама выходит из кабинета к столу агента, делает замечание или ставит задачу и возвращается
+const BOSS_VISITS = [];
+const AG_DAT = {nika:'Рустаму', boris:'Аки', timur:'Ноду', aliya:'Артуру'};
+function bossVisit(id, text, reply){ if (!AG[id] || id === 'boss') return; BOSS_VISITS.push({id, text, reply}); if (BOSS_VISITS.length > 3) BOSS_VISITS.shift(); }
+function bossVisitStart(b){
+  const v = BOSS_VISITS.shift(), a = AG[v.id];
+  const pts = [[CAB.doorX, CAB.y0 + 40], [CAB.doorX, CAB.y0 - 12], [CAB.doorX, WALK_Y], [a.sx, WALK_Y], [a.sx, 62]];
+  bossWalk(b, pts, `Идёт к ${AG_DAT[v.id] || a.name}`); act(b, {type:'face', dir:'NE'});
+  act(b, {type:'call', fn:()=>{ say(b, v.text, 4.6); emote(a, '!', 1.4); }});
+  act(b, {type:'wait', dur:4.8, status:`Проверяет работу: ${a.name}`});
+  act(b, {type:'call', fn:()=>{ if (v.reply) say(a, v.reply, 2.8); }});
+  act(b, {type:'wait', dur:v.reply ? 2.4 : 0.6, status:`Проверяет работу: ${a.name}`});
+  bossBack(b, pts);
 }
 // дорога на планёрку: через дверь в перегородке к круглому столу
 const BOSS_MEET = {x:190, y:180, f:'NE', path:[[CAB.doorX, CAB.y0 + 40], [CAB.doorX, CAB.y0 - 12], [205, CAB.y0 - 16]]};
@@ -208,7 +223,8 @@ function updateScene(dt){
       if (!x){
         a.typing = a.seated && !SIM.paused && (Math.sin(t*0.7 + a.i*2) > 0.35);
         if (!SIM.paused && !MEET.active && a.queue.length){ a.idle = 0; startJob(a, a.queue.shift()); continue; }
-        a.status = SIM.paused ? 'Пауза' : MEET.active ? 'На планёрке' : a.boss ? 'В кабинете' : (a.id==='aliya' && S.pending.length ? 'Ждёт вашего решения' : 'Следит за рынком');
+        if (a.boss && BOSS_VISITS.length && a.seated && !SIM.paused && !MEET.active){ bossVisitStart(a); continue; }
+        a.status = SIM.paused ? 'Пауза' : MEET.active ? 'На планёрке' : a.boss ? 'Следит за командой' : (a.id==='aliya' && S.pending.length ? 'Ждёт вашего решения' : 'Следит за рынком');
         if (!SIM.paused && !MEET.active && a.seated && SIM.speed <= 3){
           a.idle += dt;
           if (a.idle > a.nextIdle){
@@ -241,7 +257,7 @@ function updateScene(dt){
       if (x.type==='waitUntil'){ if (x.fn()){ a.actions.shift(); continue; } a.status = x.status || a.status; break; }
       a.actions.shift();
       if (x.type==='stand'){ a.seated = false; a.x = a.sx; a.y = a.sy ?? SEAT_Y; a.walkStatus = x.status || null; }
-      else if (x.type==='sit'){ a.walkStatus = null; a.seated = true; a.x = a.sx; a.y = a.sy ?? SEAT_Y; a.facing = 'SW'; }
+      else if (x.type==='sit'){ a.walkStatus = null; a.seated = true; a.x = a.sx; a.y = a.sy ?? SEAT_Y; a.facing = a.sitFace || 'SW'; }
       else if (x.type==='face'){ a.facing = x.dir; }
       else if (x.type==='carry'){ a.carry = x.v; }
       else if (x.type==='call'){ x.fn(); }
@@ -283,9 +299,12 @@ function gatherMeeting(){
   act(b, {type:'waitUntil', fn:()=>!MEET.active, status:'Проводит планёрку'}); bossBack(b, [...m.path, [m.x, m.y]]);
 }
 function endMeeting(){ MEET.active = false; }
+function meetGathered(){ return ALL_AG.every(a=>{ const x = a.actions[0]; return x && x.type==='waitUntil'; }); }
+async function waitGathered(ms){ const t0 = performance.now(); while (performance.now() - t0 < ms && MEET.active && !meetGathered()) await new Promise(r=>setTimeout(r, 250)); }
 function resetScene(){
   PLANES = []; MEET.active = false;
-  for (const a of ALL_AG){ Object.assign(a, {x:a.sx, y:a.sy ?? SEAT_Y, seated:true, facing:'SW', actions:[], queue:[], job:null, bubble:null, emote:null, carry:false, holdCup:false, plan:{x:a.sx,y:a.sy ?? SEAT_Y}, exitPath:null}); }
+  BOSS_VISITS.length = 0;
+  for (const a of ALL_AG){ Object.assign(a, {x:a.sx, y:a.sy ?? SEAT_Y, seated:true, facing:a.sitFace || 'SW', actions:[], queue:[], job:null, bubble:null, emote:null, carry:false, holdCup:false, plan:{x:a.sx,y:a.sy ?? SEAT_Y}, exitPath:null}); }
 }
 
 // ================= ОТРИСОВКА =================

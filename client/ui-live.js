@@ -3,9 +3,9 @@ const $ = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>[...r.querySelectorAll(s)];
 const esc = s=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const AVA = {};
-const TAG_RU = {news:'Новость', brief:'Сводка', risk:'Риск', signal:'Сигнал', trade:'Сделка', meet:'Планёрка', chat:'Разговор', system:'Система'};
-const FILTERS = [['all','Все'],['news','Новости'],['risk','Риски'],['signal','Сигналы'],['trade','Сделки'],['meet','Claude']];
-const FILTER_TAGS = {news:['news','brief'], risk:['risk'], signal:['signal'], trade:['trade','system'], meet:['meet','chat']};
+const TAG_RU = {news:'Новость', brief:'Сводка', risk:'Риск', signal:'Сигнал', trade:'Сделка', meet:'Планёрка', chat:'Разговор', system:'Система', boss:'Контроль'};
+const FILTERS = [['all','Все'],['news','Новости'],['risk','Риски'],['signal','Сигналы'],['trade','Сделки'],['boss','Джама'],['meet','Claude']];
+const FILTER_TAGS = {news:['news','brief'], risk:['risk'], signal:['signal'], trade:['trade','system'], boss:['boss','meet'], meet:['meet','chat']};
 let feedFilter = 'all', activeTab = 'feed', uiReady = false;
 const CSS = {};
 function readCSS(){ const cs = getComputedStyle(document.documentElement); for (const k of ['text','muted','faint','line','up','down','accent','panel','panel-2','grid','ref','ema9','ema21']) CSS[k] = cs.getPropertyValue('--'+k).trim(); }
@@ -24,14 +24,19 @@ function bootLive(){
   on('hello', ()=>{ if (!uiReady) initDataUI(); else rebuildAfterHello(); });
   on('state', ()=>{ if (!uiReady) return; syncControls(); renderApproval(); if (activeTab==='port') renderPortfolio(false); });
   on('feed', m=>{ if (uiReady) addFeedItem(m, true); });
-  on('status', renderStatus); on('conn', renderStatus);
+  on('status', renderStatus); on('conn', renderStatus); on('accounts', renderStatus); on('state', renderStatus);
   on('backtest', renderBtBox);
   on('review', renderRevBox); on('state', ()=>{ if (activeTab==='port') renderStratBox(); });
   on('accounts', ()=>{ renderAccounts(); renderAcctBox(); }); on('hello', renderAccounts); on('state', ()=>{ if (S.account && S.account.id !== shownAccount) renderAccounts(); renderAcctBox(); });
+  on('bossVisit', v=>{ if (v && AG[v.agent]) bossVisit(v.agent, v.text, v.reply); });
+  on('boss', ()=>{ if (activeTab==='agent') updateAgentPanel(); });
   on('meetStart', ()=>{ if (!MEET.active){ gatherMeeting(); for (const a of ALL_AG) say(a, '…', 60); } updateMeetBtn(); });
   on('meeting', async m=>{
     if (m.error){ for (const a of ALL_AG) a.bubble = null; toast(m.error, 4500); endMeeting(); updateMeetBtn(); return; }
+    await waitGathered(14000);
     for (const a of ALL_AG) a.bubble = null;
+    // Джама открывает планёрку, агенты докладывают, Джама подводит итог
+    if (m.data && m.data.open){ say(BOSS, m.data.open, 3.6); await new Promise(r=>setTimeout(r, 3500)); }
     for (const a of ALL_AG){ const line = m.data && m.data[a.id]; if (!line) continue; say(a, line, 3.4); await new Promise(r=>setTimeout(r, 3300)); }
     if (m.data && m.data.profile && m.data.profile !== S.profile) offerProfile(m.data.profile);
     await new Promise(r=>setTimeout(r, 2000)); endMeeting(); updateMeetBtn();
@@ -61,7 +66,7 @@ function initStaticUI(){
   $('#chkTrade').onchange = e=>wsSend({t:'trading', v:e.target.checked});
   $('#chkAuto').onchange = e=>wsSend({t:'auto', v:e.target.checked});
   $('#selProfile').onchange = e=>{ if (e.target.value!=='custom') wsSend({t:'profile', v:e.target.value}); };
-  $('#bMeet').onclick = ()=>{ if (MEET.active) return; if (!CFGC.ai){ toast('Планёрка работает, когда на сервере задан ANTHROPIC_API_KEY', 4000); return; } wsSend({t:'meeting'}); $('#bMeet').disabled = true; };
+  $('#bMeet').onclick = ()=>{ if (MEET.active) return; wsSend({t:'meeting'}); $('#bMeet').disabled = true; };
   initOfficeUI();
   addEventListener('resize', ()=>{ CH.sized = false; EQ.sized = false; drawChart(); drawSparks(); });
   renderStatus();
@@ -123,14 +128,19 @@ function openAcctModal(a){
 }
 function renderStatus(){
   const el = $('#conn'); if (!el) return;
-  const m = S.status && S.status.market;
-  let cls = 'ok', txt = CFGC.venue || 'Подключение…';
-  if (WS_STATE !== 'open'){ cls = 'warn'; txt = 'Нет связи с сервером…'; }
-  else if (m && !m.ok){ cls = 'bad'; txt = m.error || 'Биржа недоступна'; }
-  el.className = 'conn ' + cls; el.textContent = txt; el.title = txt;
+  // лампочка связи с Binance: зелёная — котировки идут и биржевой счёт подключён, красная — что-то из этого не работает
+  const m = S.status && S.status.market, accs = (S.accounts || CFGC.accounts || []).filter(a => a.kind === 'exchange' && a.configured);
+  const down = accs.filter(a => !a.ready);
+  let cls = 'ok', txt = 'Binance: связь есть' + (accs.length ? ` — котировки и ${accs.map(a => `«${a.label}»`).join(', ')}` : ', котировки идут');
+  if (WS_STATE !== 'open'){ cls = 'bad'; txt = 'Нет связи с сервером офиса — переподключаюсь…'; }
+  else if (!m){ cls = 'bad'; txt = 'Binance: подключаюсь…'; }
+  else if (!m.ok){ cls = 'bad'; txt = 'Binance: нет котировок. ' + (m.error || ''); }
+  else if (down.length){ cls = 'bad'; txt = down.map(a => `«${a.label}»: ${a.error || 'нет связи'}`).join(' '); }
+  if (el.dataset.t !== txt || !el.classList.contains(cls)){ el.className = 'conn ' + cls; el.dataset.t = txt; el.title = txt; el.setAttribute('aria-label', txt); el.textContent = ''; }
+  if (!el.onclick) el.onclick = ()=> toast(el.dataset.t || '', 5000);
   const ld = $('#loadingText'); if (ld && !uiReady) ld.textContent = (m && m.error) ? m.error : WS_STATE==='open' ? 'Загружаю котировки…' : 'Подключаюсь к серверу…';
 }
-function updateMeetBtn(){ const b = $('#bMeet'); b.disabled = MEET.active; b.textContent = MEET.active ? 'Идёт планёрка…' : 'Планёрка с Claude'; }
+function updateMeetBtn(){ const b = $('#bMeet'); b.disabled = MEET.active; b.textContent = MEET.active ? 'Идёт планёрка…' : 'Планёрка у Джамы'; }
 function setTab(t){
   activeTab = t;
   const map = {feed:['#tFeed','#pFeed'], port:['#tPort','#pPort'], agent:['#tAgent','#pAgent']};
@@ -579,7 +589,8 @@ function onReset(){
 // ---------- карточка агента ----------
 function kpisFor(id){
   const st = S.stats || {};
-  if (id==='boss'){ const eq = equity(), tot = eq - (S.pf.startEquity || eq); return [['Капитал', fmtUSD(eq)], ['С начала', `<span class="${tot>=0?'up':'down'}">${fmtUSD(tot,true)}</span>`], ['Позиций', String(S.pf.positions.length)]]; }
+  if (id==='boss'){ const B = S.boss || {}, n = (B.checks||[]).filter(c=>c.level!=='ok').length, t = (B.tasks||[]).filter(t=>t.status==='open').length, k = (B.kpi||[]).find(k=>k.real) || (B.kpi||[])[0];
+    return [['Замечаний', n ? `<span class="down">${n}</span>` : '<span class="up">0</span>'], ['Поручений', String(t)], [k && k.real ? 'Реальный, 30 дн.' : 'Счёт, 30 дн.', k && k.r30 != null ? `<span class="${k.r30>=0?'up':'down'}">${fmtPct(k.r30)}</span>` : '—']]; }
   const g = (o,k)=> (o && o[k]) || 0;
   if (id==='nika') return [['Сводок', g(st.nika,'briefs')], ['Новостей', g(st.nika,'news')], ['Надёжных', g(st.nika,'news') ? Math.round(g(st.nika,'reliable')/g(st.nika,'news')*100)+'%' : '—']];
   if (id==='boris') return [['Оценок', g(st.boris,'evals')], ['Одобрено', g(st.boris,'ok') + (g(st.boris,'caution')?` +${g(st.boris,'caution')}`:'')], ['Отклонено', g(st.boris,'reject')]];
@@ -587,14 +598,38 @@ function kpisFor(id){
   const pf = S.pf;
   return [['Ордеров', g(st.aliya,'orders')], ['Винрейт', pf.closedCount ? Math.round(pf.wins/pf.closedCount*100)+'%' : '—'], ['P&L сделок', `<span class="${(pf.realized||0)>=0?'up':'down'}">${fmtUSD(pf.realized||0,true)}</span>`]];
 }
-function workFor(id){
-  if (id==='boss'){
-    const rows = AG_LIST.map(a=>`<tr><td><b>${a.name}</b><br><small style="color:var(--faint)">${esc(a.short)}</small></td><td>${esc(a.status)}</td></tr>`).join('');
-    const st = S.strat, nm = {trend:'Тренд', carry:'Фандинг-арбитраж', mr:'Возврат к среднему'};
-    const strat = st && st.alloc ? `<div class="sec">Стратегии</div><ul class="duties">${['trend','carry','mr'].map(k=>`<li><b>${nm[k]}</b> — ${Math.round((st.alloc[k]||0)*100)}% капитала${st.paperPnl && st.paperPnl[k] != null ? `, ${fmtUSD(st.paperPnl[k], true)} на виртуальном` : ''}</li>`).join('')}</ul>` : '';
-    const rv = S.review && S.review.reviews && S.review.reviews.find(r=>!r.error);
-    return `<table class="tbl"><thead><tr><th>Команда</th><th>Сейчас</th></tr></thead><tbody>${rows}</tbody></table>${strat}${rv ? `<div class="sec">Последний разбор</div><p class="revsum">${esc(rv.summary||'')}</p>` : ''}`;
+const LV_RU = {ok:'норма', warn:'внимание', bad:'проблема'};
+const TASK_ST = {open:['warn','в работе'], done:['ok','выполнено'], expired:['bad','просрочено'], replaced:['off','заменено']};
+function lvOf(cs){ return cs.some(c=>c.level==='bad') ? 'bad' : cs.some(c=>c.level==='warn') ? 'warn' : 'ok'; }
+function bossTaskFor(id){ const B = S.boss; const t = B && (B.tasks||[]).find(t=>t.agent===id && t.status==='open'); return t ? `<div class="btask"><b>Поручение Джамы</b> · ${revDate(t.ts)}<br>${esc(t.task)}${t.check ? `<div class="btsub">Проверим: ${esc(t.check)}</div>` : ''}</div>` : ''; }
+function bossWork(){
+  const B = S.boss; if (!B) return '<p class="btsub">Джама начнёт проверку команды через пару минут после запуска сервера.</p>';
+  const rows = AG_LIST.map(a=>{
+    const cs = (B.checks||[]).filter(c=>c.agent===a.id), lv = lvOf(cs), bad = cs.filter(c=>c.level!=='ok'), list = bad.length ? bad : cs.slice(0, 2);
+    const t = (B.tasks||[]).find(t=>t.agent===a.id && t.status==='open');
+    return `<tr><td style="width:30%"><b>${a.name}</b><br><small style="color:var(--faint)">${esc(a.short)}</small></td><td><span class="lv ${lv}" title="${LV_RU[lv]}"></span>${list.map(c=>esc(c.text)).join('<br>') || 'проверка ещё не проводилась'}${t ? `<div class="btsub">Поручение: ${esc(t.task)}</div>` : ''}</td></tr>`;
+  }).join('');
+  let h = `<div class="sec">Контроль команды<span class="note">${B.checked ? 'проверка ' + fmtTime(B.checked) : 'каждые 5 минут'}</span></div><table class="tbl"><tbody>${rows}</tbody></table>`;
+  for (const k of B.kpi||[]){
+    h += `<div class="sec">Показатели · ${k.real ? 'реальный счёт' : 'виртуальный счёт'}<span class="note">${fmtUSD(k.equity)}${k.r7 != null ? ` · ${k.d7 >= 7 ? '7 дн.' : k.d7 + ' дн.'} ${fmtPct(k.r7)}` : ''}</span></div>`;
+    h += `<table class="tbl"><thead><tr><th>Цель</th><th class="num">Факт</th><th></th></tr></thead><tbody>${k.targets.map(t=>`<tr><td>${esc(t.name)}<div class="btsub">${esc(t.target)}</div></td><td class="num">${esc(t.fact)}</td><td class="num"><span class="lv ${t.ok===true?'ok':t.ok===false?'bad':'off'}" title="${t.ok===true?'выполнено':t.ok===false?'не выполнено':'мало данных'}"></span></td></tr>`).join('')}</tbody></table>`;
   }
+  const next = B.next ? new Date(B.next).toLocaleString('ru-RU', {day:'numeric', month:'long', hour:'2-digit', minute:'2-digit'}) : '—';
+  h += `<div class="sec">Планёрки<span class="note">следующая — ${next}</span></div>`;
+  const m = (B.meetings||[])[0];
+  if (m){
+    h += `<div class="revitem" style="border-top:0;padding-top:2px"><b>${revDate(m.ts)} · ${esc(m.why)}${m.ai ? '' : ' · без Claude'}</b><p>${esc(m.summary||'')}</p>`;
+    if ((m.decisions||[]).length) h += `<ul class="revlist">${m.decisions.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+    if ((m.proposals||[]).length) h += `<ul class="revlist">${m.proposals.map(p=>`<li><span class="acctst ${VERDICT[p.verdict] ? VERDICT[p.verdict][0] : 'off'}">${VERDICT[p.verdict] ? VERDICT[p.verdict][1] : esc(p.verdict)}</span> ${esc(p.name)}: ${esc(String(p.from ?? '—'))} → ${esc(String(p.value))}<div class="btsub">${esc(p.verdictWhy||'')}</div></li>`).join('')}</ul>`;
+    h += '</div>';
+  } else h += '<p class="btsub">Планёрок ещё не было. Джама собирает команду каждое утро в 10:00 и сразу, если что-то идёт не так; можно позвать и кнопкой «Планёрка у Джамы».</p>';
+  const ts = (B.tasks||[]).slice(0, 8);
+  if (ts.length) h += `<div class="sec">Поручения</div><ul class="revlist">${ts.map(t=>{ const st = TASK_ST[t.status] || ['off', t.status]; const note = t.status==='done' && t.note ? t.note : t.review && t.review.note ? t.review.note : t.note; return `<li><span class="acctst ${st[0]}">${st[1]}</span> <b>${AG[t.agent] ? AG[t.agent].name : t.agent}:</b> ${esc(t.task)}${note ? `<div class="btsub">${esc(note)}</div>` : ''}</li>`; }).join('')}</ul>`;
+  if (B.focus && B.focus.length) h += `<div class="sec">Вопросы в разбор ошибок</div><ul class="duties" style="margin-top:4px">${B.focus.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+  return h;
+}
+function workFor(id){
+  if (id==='boss') return bossWork();
   if (id==='nika'){
     const b = S.brief; if (!b) return `<div class="empty">Сводок ещё нет.</div>`;
     const rows = [...b.items].sort((p,q)=>Math.abs(q.score)-Math.abs(p.score)).map(i=>`<tr><td><b class="mono">${i.sym}</b>${b.hot.includes(i.sym)?' <span class="pill" style="background:#3a2610;color:#ffcf8a">идея</span>':''}</td><td>${i.label}</td><td class="num ${i.sent>0.15?'up':i.sent<-0.15?'down':''}">${i.sent>=0?'+':'−'}${Math.abs(i.sent).toFixed(2)}</td><td class="num ${i.score>0?'up':'down'}">${i.score>=0?'+':'−'}${Math.abs(i.score).toFixed(2)}</td></tr>`).join('');
@@ -629,7 +664,7 @@ function buildAgentPanel(){
   const ctl = CONTROLS[id].map(c=> c.bool
     ? `<div class="ctl"><label for="p_${c.k}">${c.label}</label><label class="switch"><input type="checkbox" id="p_${c.k}" data-pk="${c.k}" ${S.params[c.k]?'checked':''}></label><div class="hint">${c.hint}</div></div>`
     : `<div class="ctl"><label for="p_${c.k}">${c.label}</label><output id="o_${c.k}">${c.fmt(S.params[c.k])}</output><input type="range" id="p_${c.k}" data-pk="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${S.params[c.k]}"><div class="hint">${c.hint}</div></div>`).join('');
-  const quick = {boss:['Как дела у офиса?','Что сейчас на реальном счёте?','Какая стратегия приносит результат?'], nika:['Что сейчас на рынке?','Какой новости ты не доверяешь?','Какая монета самая горячая?'], boris:['Какие риски видишь?','Почему отклонил последнюю идею?','Не перегружен ли портфель?'], timur:['Почему такой сигнал?','Что нужно для сигнала по BTC?','Какой порог ты бы поставил?'], aliya:['Как дела у счёта?','Что с открытыми позициями?','Какая сделка была лучшей?']}[id];
+  const quick = {boss:['Как работает команда?','Какие поручения сейчас в работе?','Что улучшить в стратегии?'], nika:['Что сейчас на рынке?','Какой новости ты не доверяешь?','Какая монета самая горячая?'], boris:['Какие риски видишь?','Почему отклонил последнюю идею?','Не перегружен ли портфель?'], timur:['Почему такой сигнал?','Что нужно для сигнала по BTC?','Какой порог ты бы поставил?'], aliya:['Как дела у счёта?','Что с открытыми позициями?','Какая сделка была лучшей?']}[id];
   const acc = {nika:'Рустама', boris:'Аки', timur:'Нода', aliya:'Артура', boss:'Джаму'}[id], ins = {nika:'Рустамом', boris:'Аки', timur:'Нодом', aliya:'Артуром', boss:'Джамой'}[id];
   const ai = CFGC.ai
     ? `<div class="chat" id="chatLog"></div><div class="quick" id="quick">${quick.map(q=>`<button type="button">${esc(q)}</button>`).join('')}</div><form class="chatform" id="chatForm"><input id="chatIn" aria-label="Вопрос агенту" type="text" maxlength="400" placeholder="Спросите ${acc} о работе" autocomplete="off"><button class="btn btn-accent" type="submit" id="chatSend">Спросить</button></form>`
@@ -638,7 +673,7 @@ function buildAgentPanel(){
     <ul class="duties">${a.duties.map(d=>`<li>${d}</li>`).join('')}</ul>
     <div class="kgrid" id="aK" style="margin-top:10px"></div>
     ${ctl ? `<div class="sec">Настройки<span class="note" id="profNote">профиль: ${S.profile==='custom'?'свой':(PROFILES[S.profile]||{label:''}).label.toLowerCase()}</span></div>${ctl}` : ''}
-    <div class="sec">Последняя работа</div><div id="aWork"></div>
+    ${id==='boss' ? '' : `<div id="aTask"></div><div class="sec">Последняя работа</div>`}<div id="aWork"></div>
     <div class="sec">Разговор с ${ins}<span class="note">через Claude</span></div>${ai}`;
   $$('[data-pk]', el).forEach(inp=>{
     const c = CONTROLS[id].find(x=>x.k===inp.dataset.pk);
@@ -658,10 +693,11 @@ function updateAgentPanel(){
   const now = $('#aNow'); if (!now) return; if (now.textContent !== a.status) now.textContent = a.status;
   const k = kpisFor(id).map(([l,v])=>`<div><span>${l}</span><b>${v}</b></div>`).join(''); if ($('#aK').innerHTML !== k) $('#aK').innerHTML = k;
   const w = workFor(id); const wb = $('#aWork'); if (wb._h !== w){ wb.innerHTML = w; wb._h = w; }
+  const tb = $('#aTask'); if (tb){ const t = bossTaskFor(id); if (tb._h !== t){ tb.innerHTML = t; tb._h = t; } }
 }
 function renderChat(id){
   const log = $('#chatLog'); if (!log) return; const a = AG[id];
-  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({boss:'Джама. Отвечаю за результат офиса. Спрашивайте.', nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Аки. Считаю риски и режу лишнее. Спрашивайте.', timur:'Нод на связи. Могу объяснить любой сигнал и порог.', aliya:'Артур. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
+  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({boss:'Джама. Контролирую команду, провожу планёрки и отвечаю за показатели офиса. Спрашивайте.', nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Аки. Считаю риски и режу лишнее. Спрашивайте.', timur:'Нод на связи. Могу объяснить любой сигнал и порог.', aliya:'Артур. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
   log.innerHTML = CHATS[id].map(m=>`<div class="bub ${m.role==='user'?'me':'ai'}${m.err?' err':''}" style="--c:${a.color}">${esc(m.content)}</div>`).join('');
 }
 function sendChat(id, text){

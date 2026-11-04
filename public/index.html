@@ -353,11 +353,11 @@ select:hover{background-color:var(--fill-2)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* живой режим */
-.conn{max-width:260px;font-size:12px;font-weight:500;padding:5px 11px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-flex;align-items:center;gap:6px;--t:var(--warn);background:color-mix(in srgb,var(--t) 14%,transparent);color:color-mix(in srgb,var(--t) 78%,var(--text))}
-.conn::before{content:"";width:7px;height:7px;border-radius:50%;flex:none;background:var(--t)}
+.conn{width:12px;height:12px;flex:none;border-radius:50%;padding:0;border:0;cursor:pointer;font-size:0;--t:var(--down);background:radial-gradient(circle at 35% 30%,color-mix(in srgb,#fff 55%,var(--t)) 0 22%,var(--t) 60%);box-shadow:0 0 0 3px color-mix(in srgb,var(--t) 18%,transparent),0 0 10px color-mix(in srgb,var(--t) 70%,transparent)}
 .conn.ok{--t:var(--up)}
-.conn.warn{--t:var(--warn)}
-.conn.bad{--t:var(--down);white-space:normal;max-width:340px;border-radius:14px}
+.conn.bad{--t:var(--down);animation:connPulse 1.6s ease-in-out infinite}
+@keyframes connPulse{50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--t) 10%,transparent),0 0 4px color-mix(in srgb,var(--t) 40%,transparent)}}
+@media (prefers-reduced-motion: reduce){ .conn.bad{animation:none} }
 a.btn{text-decoration:none}
 .loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--scrim);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);z-index:4;text-align:center;padding:20px}
 .loading[hidden]{display:none}
@@ -421,6 +421,14 @@ html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,
 .realctl .btn-no{margin-left:auto}
 .watch{max-height:min(56vh,620px);overflow-y:auto;overscroll-behavior:contain;padding:2px 3px 2px 0}
 
+/* руководитель: уровни проверок и поручения */
+.lv{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px;background:var(--faint)}
+.lv.ok{background:var(--up)} .lv.warn{background:var(--warn)} .lv.bad{background:var(--down)} .lv.off{background:color-mix(in srgb,var(--faint) 50%,transparent)}
+td .lv{margin-right:6px}
+.acctst.warn{--t:var(--warn)}
+.btask{margin-top:12px;padding:9px 11px;border-radius:12px;font-size:12.5px;line-height:1.4;background:color-mix(in srgb,#8e3047 9%,transparent);box-shadow:inset 3px 0 0 #8e3047}
+.btask b{color:color-mix(in srgb,#8e3047 70%,var(--text))}
+
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
@@ -442,7 +450,7 @@ html[data-real] .acct select{background-color:color-mix(in srgb,var(--down) 14%,
     <label class="field acct" for="selAccount">Счёт
       <select id="selAccount"><option>Загрузка…</option></select>
     </label>
-    <span class="conn warn" id="conn" role="status">Подключение…</span>
+    <span class="conn bad" id="conn" role="status" aria-label="Binance: подключаюсь…" title="Binance: подключаюсь…"></span>
     <div class="seg theme" role="group" aria-label="Тема оформления">
       <button type="button" data-theme-set="light" aria-pressed="false" title="Светлая тема — в офисе день"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg><span class="sr">Светлая</span></button>
       <button type="button" data-theme-set="dark" aria-pressed="false" title="Тёмная тема — в офисе ночь"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.2 14.6A8.4 8.4 0 0 1 9.4 3.8a8.6 8.6 0 1 0 10.8 10.8z"/></svg><span class="sr">Тёмная</span></button>
@@ -650,7 +658,9 @@ function onServer(m){
     case 'review': S.review = m.review; emit('review'); break;
     case 'backtest': S.bt = m.bt; if (m.bt.res && m.bt.res.windows) S.btRes = m.bt.res; emit('backtest'); break;
     case 'chat': { const cb = REQ[m.reqId]; if (cb){ delete REQ[m.reqId]; cb(m); } break; }
-    case 'meetStart': emit('meetStart'); break;
+    case 'meetStart': emit('meetStart', m.why); break;
+    case 'boss': S.boss = m.boss; emit('boss'); break;
+    case 'bossVisit': emit('bossVisit', m); break;
     case 'meeting': emit('meeting', m); break;
   }
 }
@@ -694,13 +704,14 @@ AGENT_DEFS.forEach((d,i)=>{
 const AG_LIST = AGENT_DEFS.map(d=>AG[d.id]);
 // ---------- кабинет руководителя: такое же помещение перед офисом, за стеклянной перегородкой ----------
 const CAB = {y0:FD, y1:FD*2, doorX:266, doorW:34};
-const BOSS_DESK = {x:135, y:292, w:84, d:36};
-const BOSS_SEAT = {x:135, y:266};
+// стол стоит лицом к перегородке: Джама сидит за ним спиной к фасаду и видит, как работает команда
+const BOSS_DESK = {x:135, y:262, w:84, d:36};
+const BOSS_SEAT = {x:135, y:300};
 const BOSS_DEF = {id:'boss', name:'Джама', role:'Руководитель офиса', short:'Руководитель', color:'#8e3047',
   look:{skin:'#e0a983', hair:'#e0a983', hairL:'#e9b893', shirt:'#5a1a2a', shirtL:'#7a2a3c', shirtD:'#3e1019', pants:'#4e1724', shoes:'#141414', iris:'#3b2618', style:'bald', acc:'', mug:'#ffffff'},
-  duties:['Отвечает за результат офиса и дисциплину риска','Следит за командой из кабинета через стеклянную перегородку','Приходит на планёрки и подводит итог']};
-AG.boss = Object.assign({}, BOSS_DEF, {fem:false, i:4, dx:BOSS_DESK.x, sx:BOSS_SEAT.x, sy:BOSS_SEAT.y, ax:BOSS_SEAT.x+52, x:BOSS_SEAT.x, y:BOSS_SEAT.y, facing:'SW', seated:true, actions:[], queue:[], job:null,
-  status:'В кабинете', bubble:null, emote:null, typing:false, phase:0, jumpT:0, armsUp:0, idle:0, nextIdle:rnd(14,26), cup:false, holdCup:false, carry:false,
+  duties:['Контролирует работу команды: данные Рустама, риск Аки, сигналы Нода, исполнение Артура','Проводит планёрки: каждое утро и сразу, если что-то пошло не так; раздаёт поручения и проверяет их','Разбирает стратегии и добивается лучших показателей — поправки принимаются, только если лучше на истории']};
+AG.boss = Object.assign({}, BOSS_DEF, {fem:false, i:4, dx:BOSS_DESK.x, sx:BOSS_SEAT.x, sy:BOSS_SEAT.y, ax:BOSS_SEAT.x+52, x:BOSS_SEAT.x, y:BOSS_SEAT.y, facing:'NE', sitFace:'NE', seated:true, actions:[], queue:[], job:null,
+  status:'Следит за командой', bubble:null, emote:null, typing:false, phase:0, jumpT:0, armsUp:0, idle:0, nextIdle:rnd(14,26), cup:false, holdCup:false, carry:false,
   plan:{x:BOSS_SEAT.x, y:BOSS_SEAT.y}, exitPath:null, blinkAt:rnd(1,4), walkStatus:null, boss:true});
 const BOSS = AG.boss;
 const ALL_AG = [...AG_LIST, BOSS];
@@ -712,7 +723,7 @@ function bossIdle(a){
   const r = rand();
   if (r < 0.45){
     // подходит к стеклу и смотрит, как работает команда
-    const x = [60, 205, 230, 298][Math.floor(rand()*4)], pts = x > CAB.doorX ? [[CAB.doorX + 30, CAB.y0 + 36], [x, CAB.y0 + 14]] : [[x, CAB.y0 + 14]];
+    const x = [205, 228, 300, 332][Math.floor(rand()*4)], pts = x > CAB.doorX ? [[CAB.doorX + 30, CAB.y0 + 36], [x, CAB.y0 + 14]] : [[x, CAB.y0 + 14]];
     bossWalk(a, pts, 'Идёт к стеклу'); act(a, {type:'face', dir:'NE'});
     act(a, {type:'wait', dur:rnd(5,9), status:'Смотрит, как работает команда'}); bossBack(a, pts);
   } else if (r < 0.75){
@@ -720,6 +731,20 @@ function bossIdle(a){
     const pts = [[BOSS_AISLE.x, CAB.y0 + 150], [26, CAB.y0 + 150]];
     bossWalk(a, pts, 'Идёт к стеллажу'); act(a, {type:'face', dir:'NW'}); act(a, {type:'wait', dur:rnd(3,5), status:'Ищет отчёт'}); bossBack(a, pts);
   } else a.armsUp = 1.1;
+}
+// обход: Джама выходит из кабинета к столу агента, делает замечание или ставит задачу и возвращается
+const BOSS_VISITS = [];
+const AG_DAT = {nika:'Рустаму', boris:'Аки', timur:'Ноду', aliya:'Артуру'};
+function bossVisit(id, text, reply){ if (!AG[id] || id === 'boss') return; BOSS_VISITS.push({id, text, reply}); if (BOSS_VISITS.length > 3) BOSS_VISITS.shift(); }
+function bossVisitStart(b){
+  const v = BOSS_VISITS.shift(), a = AG[v.id];
+  const pts = [[CAB.doorX, CAB.y0 + 40], [CAB.doorX, CAB.y0 - 12], [CAB.doorX, WALK_Y], [a.sx, WALK_Y], [a.sx, 62]];
+  bossWalk(b, pts, `Идёт к ${AG_DAT[v.id] || a.name}`); act(b, {type:'face', dir:'NE'});
+  act(b, {type:'call', fn:()=>{ say(b, v.text, 4.6); emote(a, '!', 1.4); }});
+  act(b, {type:'wait', dur:4.8, status:`Проверяет работу: ${a.name}`});
+  act(b, {type:'call', fn:()=>{ if (v.reply) say(a, v.reply, 2.8); }});
+  act(b, {type:'wait', dur:v.reply ? 2.4 : 0.6, status:`Проверяет работу: ${a.name}`});
+  bossBack(b, pts);
 }
 // дорога на планёрку: через дверь в перегородке к круглому столу
 const BOSS_MEET = {x:190, y:180, f:'NE', path:[[CAB.doorX, CAB.y0 + 40], [CAB.doorX, CAB.y0 - 12], [205, CAB.y0 - 16]]};
@@ -865,7 +890,8 @@ function updateScene(dt){
       if (!x){
         a.typing = a.seated && !SIM.paused && (Math.sin(t*0.7 + a.i*2) > 0.35);
         if (!SIM.paused && !MEET.active && a.queue.length){ a.idle = 0; startJob(a, a.queue.shift()); continue; }
-        a.status = SIM.paused ? 'Пауза' : MEET.active ? 'На планёрке' : a.boss ? 'В кабинете' : (a.id==='aliya' && S.pending.length ? 'Ждёт вашего решения' : 'Следит за рынком');
+        if (a.boss && BOSS_VISITS.length && a.seated && !SIM.paused && !MEET.active){ bossVisitStart(a); continue; }
+        a.status = SIM.paused ? 'Пауза' : MEET.active ? 'На планёрке' : a.boss ? 'Следит за командой' : (a.id==='aliya' && S.pending.length ? 'Ждёт вашего решения' : 'Следит за рынком');
         if (!SIM.paused && !MEET.active && a.seated && SIM.speed <= 3){
           a.idle += dt;
           if (a.idle > a.nextIdle){
@@ -898,7 +924,7 @@ function updateScene(dt){
       if (x.type==='waitUntil'){ if (x.fn()){ a.actions.shift(); continue; } a.status = x.status || a.status; break; }
       a.actions.shift();
       if (x.type==='stand'){ a.seated = false; a.x = a.sx; a.y = a.sy ?? SEAT_Y; a.walkStatus = x.status || null; }
-      else if (x.type==='sit'){ a.walkStatus = null; a.seated = true; a.x = a.sx; a.y = a.sy ?? SEAT_Y; a.facing = 'SW'; }
+      else if (x.type==='sit'){ a.walkStatus = null; a.seated = true; a.x = a.sx; a.y = a.sy ?? SEAT_Y; a.facing = a.sitFace || 'SW'; }
       else if (x.type==='face'){ a.facing = x.dir; }
       else if (x.type==='carry'){ a.carry = x.v; }
       else if (x.type==='call'){ x.fn(); }
@@ -940,9 +966,12 @@ function gatherMeeting(){
   act(b, {type:'waitUntil', fn:()=>!MEET.active, status:'Проводит планёрку'}); bossBack(b, [...m.path, [m.x, m.y]]);
 }
 function endMeeting(){ MEET.active = false; }
+function meetGathered(){ return ALL_AG.every(a=>{ const x = a.actions[0]; return x && x.type==='waitUntil'; }); }
+async function waitGathered(ms){ const t0 = performance.now(); while (performance.now() - t0 < ms && MEET.active && !meetGathered()) await new Promise(r=>setTimeout(r, 250)); }
 function resetScene(){
   PLANES = []; MEET.active = false;
-  for (const a of ALL_AG){ Object.assign(a, {x:a.sx, y:a.sy ?? SEAT_Y, seated:true, facing:'SW', actions:[], queue:[], job:null, bubble:null, emote:null, carry:false, holdCup:false, plan:{x:a.sx,y:a.sy ?? SEAT_Y}, exitPath:null}); }
+  BOSS_VISITS.length = 0;
+  for (const a of ALL_AG){ Object.assign(a, {x:a.sx, y:a.sy ?? SEAT_Y, seated:true, facing:a.sitFace || 'SW', actions:[], queue:[], job:null, bubble:null, emote:null, carry:false, holdCup:false, plan:{x:a.sx,y:a.sy ?? SEAT_Y}, exitPath:null}); }
 }
 
 // ================= ОТРИСОВКА =================
@@ -2596,7 +2625,7 @@ const O3 = (()=>{
       c.strokeStyle = '#a8864e'; c.lineWidth = 10; c.strokeRect(34, 34, w - 68, h - 68); c.lineWidth = 3; c.strokeRect(58, 58, w - 116, h - 116);
       c.strokeStyle = 'rgba(168,134,78,.35)'; c.lineWidth = 2; for (let k = 1; k < 6; k++){ c.beginPath(); c.moveTo(58 + k*(w - 116)/6, 58); c.lineTo(58 + k*(w - 116)/6, h - 58); c.stroke(); } });
     const rm = std('#ffffff', {map:rugTex, roughness:1});
-    for (const [x0, yy0, w, h] of [[66, y0 + 44, 140, 110], [284, y0 + 34, 136, 78]]){ const r = new THREE.Mesh(new THREE.PlaneGeometry(w, h), rm); r.rotation.x = -Math.PI/2; r.position.set(x0 + w/2, 0.16, yy0 + h/2); r.receiveShadow = true; put(r); }
+    for (const [x0, yy0, w, h] of [[62, y0 + 8, 146, 118], [284, y0 + 34, 136, 78]]){ const r = new THREE.Mesh(new THREE.PlaneGeometry(w, h), rm); r.rotation.x = -Math.PI/2; r.position.set(x0 + w/2, 0.16, yy0 + h/2); r.receiveShadow = true; put(r); }
     boxAt(30, y0 + 170, 0, 24, 24, 15, M.dark, 0.6); boxAt(29, y0 + 169, 14.4, 26, 26, 0.8, M.brass, 0.3);
     { const r = new THREE.Mesh(new THREE.CircleGeometry(1, 80), rm); r.rotation.x = -Math.PI/2; r.scale.set(46, 46, 1); r.position.set(330, 0.16, y0 + 160); r.receiveShadow = true; put(r); }
     // экран на левой стене: капитал, результат и доли стратегий
@@ -2606,8 +2635,8 @@ const O3 = (()=>{
     // табличка на столе руководителя
     const nm = canvasTex(512, 96, (c, w, h)=>{ const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#e8cd88'); g.addColorStop(1, '#a6823a'); c.fillStyle = g; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(70,45,10,.6)'; c.lineWidth = 4; c.strokeRect(4, 4, w - 8, h - 8); c.font = `700 46px ${FONT}`; c.fillStyle = '#2a1a10'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('Джама', w/2, h/2 + 2); });
     DYN.bossPlate = new THREE.Mesh(new THREE.PlaneGeometry(22, 4.2), std('#ffffff', {map:nm, roughness:0.3, metalness:0.4})); DYN.bossPlate.visible = false; put(DYN.bossPlate);
-    CUR = GRP.pendants; for (const [px, py, pz] of [[BOSS_DESK.x - 20, BOSS_DESK.y + 4, 66], [BOSS_DESK.x + 20, BOSS_DESK.y + 4, 66], [330, y0 + 160, 64]]) PENDANT_MAKE(px, py, pz);
-    LAMPS.push([BOSS_DESK.x + 32, BOSS_DESK.y - 6, 36, 'desk'], [412, y0 + 18, 49, 'floor']);
+    CUR = GRP.pendants; for (const [px, py, pz] of [[BOSS_DESK.x - 20, BOSS_DESK.y - 4, 66], [BOSS_DESK.x + 20, BOSS_DESK.y - 4, 66], [330, y0 + 160, 64]]) PENDANT_MAKE(px, py, pz);
+    LAMPS.push([BOSS_DESK.x + 32, BOSS_DESK.y + 6, 36, 'desk'], [412, y0 + 18, 49, 'floor']);
     CUR = null;
   }
   // экран руководителя: капитал счёта, результат за день и с начала, доли стратегий
@@ -3176,20 +3205,22 @@ const O3 = (()=>{
   const CY = FD;   // начало кабинета по Y
   const CAB_MEET = {x:330, y:FD + 160};
   const CAB_PROPS = [
-    {file:'mh_cab_desk', pbr:true, clearcoat:0.3, tint:'#9a8778', places:[{hide:[], cx:BOSS_DESK.x, cy:BOSS_DESK.y, w:BOSS_DESK.w, d:BOSS_DESK.d, h:24.5, rot:Math.PI/2, after:(i)=>{
-      const pl = DYN.bossPlate; if (pl){ pl.position.set(BOSS_DESK.x, i.top - 4.5, BOSS_DESK.y + BOSS_DESK.d/2 + 0.25); pl.visible = true; } }}]},
-    {file:'mh_cab_chair', pbr:true, places:[{hide:[], cx:BOSS_SEAT.x, cy:BOSS_SEAT.y - 2, h:31, uniform:true, rot:-Math.PI/2}]},
-    {file:'mh_cab_guest', pbr:true, places:[{hide:[], cx:BOSS_DESK.x - 22, cy:BOSS_DESK.y + 40, h:22, uniform:true, rot:Math.PI/2 + 0.12}, {hide:[], cx:BOSS_DESK.x + 22, cy:BOSS_DESK.y + 40, h:22, uniform:true, rot:Math.PI/2 - 0.12}]},
+    // стол развёрнут к перегородке: руководитель сидит лицом к команде, гости — спиной к стеклу
+    {file:'mh_cab_desk', pbr:true, clearcoat:0.3, tint:'#9a8778', places:[{hide:[], cx:BOSS_DESK.x, cy:BOSS_DESK.y, w:BOSS_DESK.w, d:BOSS_DESK.d, h:24.5, rot:-Math.PI/2, after:(i)=>{
+      const pl = DYN.bossPlate; if (pl){ pl.position.set(BOSS_DESK.x, i.top - 4.5, BOSS_DESK.y - BOSS_DESK.d/2 - 0.25); pl.rotation.y = Math.PI; pl.visible = true; } }}]},
+    {file:'mh_cab_chair', pbr:true, places:[{hide:[], cx:BOSS_SEAT.x, cy:BOSS_SEAT.y + 2, h:31, uniform:true, rot:Math.PI/2}]},
+    {file:'mh_cab_guest', pbr:true, places:[{hide:[], cx:BOSS_DESK.x - 22, cy:BOSS_DESK.y - 40, h:22, uniform:true, rot:-Math.PI/2 - 0.12}, {hide:[], cx:BOSS_DESK.x + 22, cy:BOSS_DESK.y - 40, h:22, uniform:true, rot:-Math.PI/2 + 0.12}]},
     {file:'mh_cab_coffee', pbr:true, clearcoat:0.5, places:[{hide:[], cx:352, cy:CY + 66, w:42, d:22, h:10, rot:0}]},
     {file:'mh_cab_books', pbr:true, tint:'#9a8778', places:[{hide:[], cx:7.6, cy:CY + 150, d:66, uniform:'d', rot:0}]},
     {file:'mh_sofa', pbr:true, places:[{hide:[], cx:352, cy:CY + 26, w:74, uniform:'w', rot:-Math.PI/2}]},
     {file:'mh_lounge', pbr:true, places:[{hide:[], cx:306, cy:CY + 68, h:27, uniform:true, rot:0.15}, {hide:[], cx:398, cy:CY + 68, h:27, uniform:true, rot:Math.PI - 0.15}]},
     {file:'mh_floorlamp', pbr:true, places:[{hide:[], cx:412, cy:CY + 18, h:54, uniform:true, rot:-Math.PI/2}]},
-    {file:'mh_credenza', pbr:true, clearcoat:0.2, places:[{hide:[], cx:BOSS_DESK.x, cy:CY + 9, w:80, uniform:'w', rot:-Math.PI/2}]},
-    {file:'mh_vase', pbr:true, places:[{hide:[], cx:BOSS_DESK.x + 30, cy:CY + 9, z:17.5, h:18, uniform:true, rot:0.4}]},
-    {file:'mh_lamp', pbr:true, places:[{hide:[], cx:BOSS_DESK.x + 33, cy:BOSS_DESK.y - 7, z:24.5, h:14, uniform:true, rot:Math.PI}]},
-    {file:'mh_monitor', pbr:true, places:[{hide:[], cx:BOSS_DESK.x - 6, cy:BOSS_DESK.y - 5, z:24.5, h:14, uniform:true, rot:Math.PI/2}]},
-    {file:'mh_barcart', pbr:true, places:[{hide:[], cx:13, cy:CY + 62, h:22, uniform:true, rot:0}]},
+    // тумба — у левой стены под экраном, тележка-бар — в зоне отдыха
+    {file:'mh_credenza', pbr:true, clearcoat:0.2, places:[{hide:[], cx:10, cy:CY + 66, d:80, uniform:'d', rot:0}]},
+    {file:'mh_vase', pbr:true, places:[{hide:[], cx:10, cy:CY + 94, z:17.5, h:18, uniform:true, rot:0.4}]},
+    {file:'mh_lamp', pbr:true, places:[{hide:[], cx:BOSS_DESK.x + 33, cy:BOSS_DESK.y + 7, z:24.5, h:14, uniform:true, rot:0}]},
+    {file:'mh_monitor', pbr:true, places:[{hide:[], cx:BOSS_DESK.x - 6, cy:BOSS_DESK.y + 5, z:24.5, h:14, uniform:true, rot:-Math.PI/2}]},
+    {file:'mh_barcart', pbr:true, places:[{hide:[], cx:418, cy:CY + 126, h:22, uniform:true, rot:Math.PI}]},
     {file:'mh_plant_fig', pbr:true, places:[{hide:[], cx:16, cy:CY + 16, h:46, uniform:true, rot:1.3}]},
     {file:'mh_plant_snake', pbr:true, places:[{hide:[], cx:22, cy:CY + 192, h:24, uniform:true, rot:0.7}]},
     {file:'mh_plant_monstera', pbr:true, places:[{hide:[], cx:418, cy:CY + 190, h:24, uniform:true, rot:1.9}]},
@@ -3330,7 +3361,7 @@ const O3 = (()=>{
   function setRot(g, x=0, y=0, z=0){ g.rotation.set(x, y, z); }
   function poseFigure(a, f, t, dt){
     if (a.walking){ const dx = a.x - f.lastX, dy = a.y - f.lastY; if (Math.hypot(dx, dy) > 0.001) f.targetYaw = Math.atan2(dx, dy); }
-    else if (a.seated) f.targetYaw = 0;
+    else if (a.seated) f.targetYaw = FACE_YAW[a.sitFace || 'SW'];
     else if (FACE_YAW[a.facing] != null) f.targetYaw = FACE_YAW[a.facing];
     f.lastX = a.x; f.lastY = a.y;
     f.yaw = lerpAngle(f.yaw, f.targetYaw, 1 - Math.exp(-dt*9));
@@ -3552,9 +3583,9 @@ const $ = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>[...r.querySelectorAll(s)];
 const esc = s=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const AVA = {};
-const TAG_RU = {news:'Новость', brief:'Сводка', risk:'Риск', signal:'Сигнал', trade:'Сделка', meet:'Планёрка', chat:'Разговор', system:'Система'};
-const FILTERS = [['all','Все'],['news','Новости'],['risk','Риски'],['signal','Сигналы'],['trade','Сделки'],['meet','Claude']];
-const FILTER_TAGS = {news:['news','brief'], risk:['risk'], signal:['signal'], trade:['trade','system'], meet:['meet','chat']};
+const TAG_RU = {news:'Новость', brief:'Сводка', risk:'Риск', signal:'Сигнал', trade:'Сделка', meet:'Планёрка', chat:'Разговор', system:'Система', boss:'Контроль'};
+const FILTERS = [['all','Все'],['news','Новости'],['risk','Риски'],['signal','Сигналы'],['trade','Сделки'],['boss','Джама'],['meet','Claude']];
+const FILTER_TAGS = {news:['news','brief'], risk:['risk'], signal:['signal'], trade:['trade','system'], boss:['boss','meet'], meet:['meet','chat']};
 let feedFilter = 'all', activeTab = 'feed', uiReady = false;
 const CSS = {};
 function readCSS(){ const cs = getComputedStyle(document.documentElement); for (const k of ['text','muted','faint','line','up','down','accent','panel','panel-2','grid','ref','ema9','ema21']) CSS[k] = cs.getPropertyValue('--'+k).trim(); }
@@ -3573,14 +3604,19 @@ function bootLive(){
   on('hello', ()=>{ if (!uiReady) initDataUI(); else rebuildAfterHello(); });
   on('state', ()=>{ if (!uiReady) return; syncControls(); renderApproval(); if (activeTab==='port') renderPortfolio(false); });
   on('feed', m=>{ if (uiReady) addFeedItem(m, true); });
-  on('status', renderStatus); on('conn', renderStatus);
+  on('status', renderStatus); on('conn', renderStatus); on('accounts', renderStatus); on('state', renderStatus);
   on('backtest', renderBtBox);
   on('review', renderRevBox); on('state', ()=>{ if (activeTab==='port') renderStratBox(); });
   on('accounts', ()=>{ renderAccounts(); renderAcctBox(); }); on('hello', renderAccounts); on('state', ()=>{ if (S.account && S.account.id !== shownAccount) renderAccounts(); renderAcctBox(); });
+  on('bossVisit', v=>{ if (v && AG[v.agent]) bossVisit(v.agent, v.text, v.reply); });
+  on('boss', ()=>{ if (activeTab==='agent') updateAgentPanel(); });
   on('meetStart', ()=>{ if (!MEET.active){ gatherMeeting(); for (const a of ALL_AG) say(a, '…', 60); } updateMeetBtn(); });
   on('meeting', async m=>{
     if (m.error){ for (const a of ALL_AG) a.bubble = null; toast(m.error, 4500); endMeeting(); updateMeetBtn(); return; }
+    await waitGathered(14000);
     for (const a of ALL_AG) a.bubble = null;
+    // Джама открывает планёрку, агенты докладывают, Джама подводит итог
+    if (m.data && m.data.open){ say(BOSS, m.data.open, 3.6); await new Promise(r=>setTimeout(r, 3500)); }
     for (const a of ALL_AG){ const line = m.data && m.data[a.id]; if (!line) continue; say(a, line, 3.4); await new Promise(r=>setTimeout(r, 3300)); }
     if (m.data && m.data.profile && m.data.profile !== S.profile) offerProfile(m.data.profile);
     await new Promise(r=>setTimeout(r, 2000)); endMeeting(); updateMeetBtn();
@@ -3610,7 +3646,7 @@ function initStaticUI(){
   $('#chkTrade').onchange = e=>wsSend({t:'trading', v:e.target.checked});
   $('#chkAuto').onchange = e=>wsSend({t:'auto', v:e.target.checked});
   $('#selProfile').onchange = e=>{ if (e.target.value!=='custom') wsSend({t:'profile', v:e.target.value}); };
-  $('#bMeet').onclick = ()=>{ if (MEET.active) return; if (!CFGC.ai){ toast('Планёрка работает, когда на сервере задан ANTHROPIC_API_KEY', 4000); return; } wsSend({t:'meeting'}); $('#bMeet').disabled = true; };
+  $('#bMeet').onclick = ()=>{ if (MEET.active) return; wsSend({t:'meeting'}); $('#bMeet').disabled = true; };
   initOfficeUI();
   addEventListener('resize', ()=>{ CH.sized = false; EQ.sized = false; drawChart(); drawSparks(); });
   renderStatus();
@@ -3672,14 +3708,19 @@ function openAcctModal(a){
 }
 function renderStatus(){
   const el = $('#conn'); if (!el) return;
-  const m = S.status && S.status.market;
-  let cls = 'ok', txt = CFGC.venue || 'Подключение…';
-  if (WS_STATE !== 'open'){ cls = 'warn'; txt = 'Нет связи с сервером…'; }
-  else if (m && !m.ok){ cls = 'bad'; txt = m.error || 'Биржа недоступна'; }
-  el.className = 'conn ' + cls; el.textContent = txt; el.title = txt;
+  // лампочка связи с Binance: зелёная — котировки идут и биржевой счёт подключён, красная — что-то из этого не работает
+  const m = S.status && S.status.market, accs = (S.accounts || CFGC.accounts || []).filter(a => a.kind === 'exchange' && a.configured);
+  const down = accs.filter(a => !a.ready);
+  let cls = 'ok', txt = 'Binance: связь есть' + (accs.length ? ` — котировки и ${accs.map(a => `«${a.label}»`).join(', ')}` : ', котировки идут');
+  if (WS_STATE !== 'open'){ cls = 'bad'; txt = 'Нет связи с сервером офиса — переподключаюсь…'; }
+  else if (!m){ cls = 'bad'; txt = 'Binance: подключаюсь…'; }
+  else if (!m.ok){ cls = 'bad'; txt = 'Binance: нет котировок. ' + (m.error || ''); }
+  else if (down.length){ cls = 'bad'; txt = down.map(a => `«${a.label}»: ${a.error || 'нет связи'}`).join(' '); }
+  if (el.dataset.t !== txt || !el.classList.contains(cls)){ el.className = 'conn ' + cls; el.dataset.t = txt; el.title = txt; el.setAttribute('aria-label', txt); el.textContent = ''; }
+  if (!el.onclick) el.onclick = ()=> toast(el.dataset.t || '', 5000);
   const ld = $('#loadingText'); if (ld && !uiReady) ld.textContent = (m && m.error) ? m.error : WS_STATE==='open' ? 'Загружаю котировки…' : 'Подключаюсь к серверу…';
 }
-function updateMeetBtn(){ const b = $('#bMeet'); b.disabled = MEET.active; b.textContent = MEET.active ? 'Идёт планёрка…' : 'Планёрка с Claude'; }
+function updateMeetBtn(){ const b = $('#bMeet'); b.disabled = MEET.active; b.textContent = MEET.active ? 'Идёт планёрка…' : 'Планёрка у Джамы'; }
 function setTab(t){
   activeTab = t;
   const map = {feed:['#tFeed','#pFeed'], port:['#tPort','#pPort'], agent:['#tAgent','#pAgent']};
@@ -4128,7 +4169,8 @@ function onReset(){
 // ---------- карточка агента ----------
 function kpisFor(id){
   const st = S.stats || {};
-  if (id==='boss'){ const eq = equity(), tot = eq - (S.pf.startEquity || eq); return [['Капитал', fmtUSD(eq)], ['С начала', `<span class="${tot>=0?'up':'down'}">${fmtUSD(tot,true)}</span>`], ['Позиций', String(S.pf.positions.length)]]; }
+  if (id==='boss'){ const B = S.boss || {}, n = (B.checks||[]).filter(c=>c.level!=='ok').length, t = (B.tasks||[]).filter(t=>t.status==='open').length, k = (B.kpi||[]).find(k=>k.real) || (B.kpi||[])[0];
+    return [['Замечаний', n ? `<span class="down">${n}</span>` : '<span class="up">0</span>'], ['Поручений', String(t)], [k && k.real ? 'Реальный, 30 дн.' : 'Счёт, 30 дн.', k && k.r30 != null ? `<span class="${k.r30>=0?'up':'down'}">${fmtPct(k.r30)}</span>` : '—']]; }
   const g = (o,k)=> (o && o[k]) || 0;
   if (id==='nika') return [['Сводок', g(st.nika,'briefs')], ['Новостей', g(st.nika,'news')], ['Надёжных', g(st.nika,'news') ? Math.round(g(st.nika,'reliable')/g(st.nika,'news')*100)+'%' : '—']];
   if (id==='boris') return [['Оценок', g(st.boris,'evals')], ['Одобрено', g(st.boris,'ok') + (g(st.boris,'caution')?` +${g(st.boris,'caution')}`:'')], ['Отклонено', g(st.boris,'reject')]];
@@ -4136,14 +4178,38 @@ function kpisFor(id){
   const pf = S.pf;
   return [['Ордеров', g(st.aliya,'orders')], ['Винрейт', pf.closedCount ? Math.round(pf.wins/pf.closedCount*100)+'%' : '—'], ['P&L сделок', `<span class="${(pf.realized||0)>=0?'up':'down'}">${fmtUSD(pf.realized||0,true)}</span>`]];
 }
-function workFor(id){
-  if (id==='boss'){
-    const rows = AG_LIST.map(a=>`<tr><td><b>${a.name}</b><br><small style="color:var(--faint)">${esc(a.short)}</small></td><td>${esc(a.status)}</td></tr>`).join('');
-    const st = S.strat, nm = {trend:'Тренд', carry:'Фандинг-арбитраж', mr:'Возврат к среднему'};
-    const strat = st && st.alloc ? `<div class="sec">Стратегии</div><ul class="duties">${['trend','carry','mr'].map(k=>`<li><b>${nm[k]}</b> — ${Math.round((st.alloc[k]||0)*100)}% капитала${st.paperPnl && st.paperPnl[k] != null ? `, ${fmtUSD(st.paperPnl[k], true)} на виртуальном` : ''}</li>`).join('')}</ul>` : '';
-    const rv = S.review && S.review.reviews && S.review.reviews.find(r=>!r.error);
-    return `<table class="tbl"><thead><tr><th>Команда</th><th>Сейчас</th></tr></thead><tbody>${rows}</tbody></table>${strat}${rv ? `<div class="sec">Последний разбор</div><p class="revsum">${esc(rv.summary||'')}</p>` : ''}`;
+const LV_RU = {ok:'норма', warn:'внимание', bad:'проблема'};
+const TASK_ST = {open:['warn','в работе'], done:['ok','выполнено'], expired:['bad','просрочено'], replaced:['off','заменено']};
+function lvOf(cs){ return cs.some(c=>c.level==='bad') ? 'bad' : cs.some(c=>c.level==='warn') ? 'warn' : 'ok'; }
+function bossTaskFor(id){ const B = S.boss; const t = B && (B.tasks||[]).find(t=>t.agent===id && t.status==='open'); return t ? `<div class="btask"><b>Поручение Джамы</b> · ${revDate(t.ts)}<br>${esc(t.task)}${t.check ? `<div class="btsub">Проверим: ${esc(t.check)}</div>` : ''}</div>` : ''; }
+function bossWork(){
+  const B = S.boss; if (!B) return '<p class="btsub">Джама начнёт проверку команды через пару минут после запуска сервера.</p>';
+  const rows = AG_LIST.map(a=>{
+    const cs = (B.checks||[]).filter(c=>c.agent===a.id), lv = lvOf(cs), bad = cs.filter(c=>c.level!=='ok'), list = bad.length ? bad : cs.slice(0, 2);
+    const t = (B.tasks||[]).find(t=>t.agent===a.id && t.status==='open');
+    return `<tr><td style="width:30%"><b>${a.name}</b><br><small style="color:var(--faint)">${esc(a.short)}</small></td><td><span class="lv ${lv}" title="${LV_RU[lv]}"></span>${list.map(c=>esc(c.text)).join('<br>') || 'проверка ещё не проводилась'}${t ? `<div class="btsub">Поручение: ${esc(t.task)}</div>` : ''}</td></tr>`;
+  }).join('');
+  let h = `<div class="sec">Контроль команды<span class="note">${B.checked ? 'проверка ' + fmtTime(B.checked) : 'каждые 5 минут'}</span></div><table class="tbl"><tbody>${rows}</tbody></table>`;
+  for (const k of B.kpi||[]){
+    h += `<div class="sec">Показатели · ${k.real ? 'реальный счёт' : 'виртуальный счёт'}<span class="note">${fmtUSD(k.equity)}${k.r7 != null ? ` · ${k.d7 >= 7 ? '7 дн.' : k.d7 + ' дн.'} ${fmtPct(k.r7)}` : ''}</span></div>`;
+    h += `<table class="tbl"><thead><tr><th>Цель</th><th class="num">Факт</th><th></th></tr></thead><tbody>${k.targets.map(t=>`<tr><td>${esc(t.name)}<div class="btsub">${esc(t.target)}</div></td><td class="num">${esc(t.fact)}</td><td class="num"><span class="lv ${t.ok===true?'ok':t.ok===false?'bad':'off'}" title="${t.ok===true?'выполнено':t.ok===false?'не выполнено':'мало данных'}"></span></td></tr>`).join('')}</tbody></table>`;
   }
+  const next = B.next ? new Date(B.next).toLocaleString('ru-RU', {day:'numeric', month:'long', hour:'2-digit', minute:'2-digit'}) : '—';
+  h += `<div class="sec">Планёрки<span class="note">следующая — ${next}</span></div>`;
+  const m = (B.meetings||[])[0];
+  if (m){
+    h += `<div class="revitem" style="border-top:0;padding-top:2px"><b>${revDate(m.ts)} · ${esc(m.why)}${m.ai ? '' : ' · без Claude'}</b><p>${esc(m.summary||'')}</p>`;
+    if ((m.decisions||[]).length) h += `<ul class="revlist">${m.decisions.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+    if ((m.proposals||[]).length) h += `<ul class="revlist">${m.proposals.map(p=>`<li><span class="acctst ${VERDICT[p.verdict] ? VERDICT[p.verdict][0] : 'off'}">${VERDICT[p.verdict] ? VERDICT[p.verdict][1] : esc(p.verdict)}</span> ${esc(p.name)}: ${esc(String(p.from ?? '—'))} → ${esc(String(p.value))}<div class="btsub">${esc(p.verdictWhy||'')}</div></li>`).join('')}</ul>`;
+    h += '</div>';
+  } else h += '<p class="btsub">Планёрок ещё не было. Джама собирает команду каждое утро в 10:00 и сразу, если что-то идёт не так; можно позвать и кнопкой «Планёрка у Джамы».</p>';
+  const ts = (B.tasks||[]).slice(0, 8);
+  if (ts.length) h += `<div class="sec">Поручения</div><ul class="revlist">${ts.map(t=>{ const st = TASK_ST[t.status] || ['off', t.status]; const note = t.status==='done' && t.note ? t.note : t.review && t.review.note ? t.review.note : t.note; return `<li><span class="acctst ${st[0]}">${st[1]}</span> <b>${AG[t.agent] ? AG[t.agent].name : t.agent}:</b> ${esc(t.task)}${note ? `<div class="btsub">${esc(note)}</div>` : ''}</li>`; }).join('')}</ul>`;
+  if (B.focus && B.focus.length) h += `<div class="sec">Вопросы в разбор ошибок</div><ul class="duties" style="margin-top:4px">${B.focus.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+  return h;
+}
+function workFor(id){
+  if (id==='boss') return bossWork();
   if (id==='nika'){
     const b = S.brief; if (!b) return `<div class="empty">Сводок ещё нет.</div>`;
     const rows = [...b.items].sort((p,q)=>Math.abs(q.score)-Math.abs(p.score)).map(i=>`<tr><td><b class="mono">${i.sym}</b>${b.hot.includes(i.sym)?' <span class="pill" style="background:#3a2610;color:#ffcf8a">идея</span>':''}</td><td>${i.label}</td><td class="num ${i.sent>0.15?'up':i.sent<-0.15?'down':''}">${i.sent>=0?'+':'−'}${Math.abs(i.sent).toFixed(2)}</td><td class="num ${i.score>0?'up':'down'}">${i.score>=0?'+':'−'}${Math.abs(i.score).toFixed(2)}</td></tr>`).join('');
@@ -4178,7 +4244,7 @@ function buildAgentPanel(){
   const ctl = CONTROLS[id].map(c=> c.bool
     ? `<div class="ctl"><label for="p_${c.k}">${c.label}</label><label class="switch"><input type="checkbox" id="p_${c.k}" data-pk="${c.k}" ${S.params[c.k]?'checked':''}></label><div class="hint">${c.hint}</div></div>`
     : `<div class="ctl"><label for="p_${c.k}">${c.label}</label><output id="o_${c.k}">${c.fmt(S.params[c.k])}</output><input type="range" id="p_${c.k}" data-pk="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${S.params[c.k]}"><div class="hint">${c.hint}</div></div>`).join('');
-  const quick = {boss:['Как дела у офиса?','Что сейчас на реальном счёте?','Какая стратегия приносит результат?'], nika:['Что сейчас на рынке?','Какой новости ты не доверяешь?','Какая монета самая горячая?'], boris:['Какие риски видишь?','Почему отклонил последнюю идею?','Не перегружен ли портфель?'], timur:['Почему такой сигнал?','Что нужно для сигнала по BTC?','Какой порог ты бы поставил?'], aliya:['Как дела у счёта?','Что с открытыми позициями?','Какая сделка была лучшей?']}[id];
+  const quick = {boss:['Как работает команда?','Какие поручения сейчас в работе?','Что улучшить в стратегии?'], nika:['Что сейчас на рынке?','Какой новости ты не доверяешь?','Какая монета самая горячая?'], boris:['Какие риски видишь?','Почему отклонил последнюю идею?','Не перегружен ли портфель?'], timur:['Почему такой сигнал?','Что нужно для сигнала по BTC?','Какой порог ты бы поставил?'], aliya:['Как дела у счёта?','Что с открытыми позициями?','Какая сделка была лучшей?']}[id];
   const acc = {nika:'Рустама', boris:'Аки', timur:'Нода', aliya:'Артура', boss:'Джаму'}[id], ins = {nika:'Рустамом', boris:'Аки', timur:'Нодом', aliya:'Артуром', boss:'Джамой'}[id];
   const ai = CFGC.ai
     ? `<div class="chat" id="chatLog"></div><div class="quick" id="quick">${quick.map(q=>`<button type="button">${esc(q)}</button>`).join('')}</div><form class="chatform" id="chatForm"><input id="chatIn" aria-label="Вопрос агенту" type="text" maxlength="400" placeholder="Спросите ${acc} о работе" autocomplete="off"><button class="btn btn-accent" type="submit" id="chatSend">Спросить</button></form>`
@@ -4187,7 +4253,7 @@ function buildAgentPanel(){
     <ul class="duties">${a.duties.map(d=>`<li>${d}</li>`).join('')}</ul>
     <div class="kgrid" id="aK" style="margin-top:10px"></div>
     ${ctl ? `<div class="sec">Настройки<span class="note" id="profNote">профиль: ${S.profile==='custom'?'свой':(PROFILES[S.profile]||{label:''}).label.toLowerCase()}</span></div>${ctl}` : ''}
-    <div class="sec">Последняя работа</div><div id="aWork"></div>
+    ${id==='boss' ? '' : `<div id="aTask"></div><div class="sec">Последняя работа</div>`}<div id="aWork"></div>
     <div class="sec">Разговор с ${ins}<span class="note">через Claude</span></div>${ai}`;
   $$('[data-pk]', el).forEach(inp=>{
     const c = CONTROLS[id].find(x=>x.k===inp.dataset.pk);
@@ -4207,10 +4273,11 @@ function updateAgentPanel(){
   const now = $('#aNow'); if (!now) return; if (now.textContent !== a.status) now.textContent = a.status;
   const k = kpisFor(id).map(([l,v])=>`<div><span>${l}</span><b>${v}</b></div>`).join(''); if ($('#aK').innerHTML !== k) $('#aK').innerHTML = k;
   const w = workFor(id); const wb = $('#aWork'); if (wb._h !== w){ wb.innerHTML = w; wb._h = w; }
+  const tb = $('#aTask'); if (tb){ const t = bossTaskFor(id); if (tb._h !== t){ tb.innerHTML = t; tb._h = t; } }
 }
 function renderChat(id){
   const log = $('#chatLog'); if (!log) return; const a = AG[id];
-  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({boss:'Джама. Отвечаю за результат офиса. Спрашивайте.', nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Аки. Считаю риски и режу лишнее. Спрашивайте.', timur:'Нод на связи. Могу объяснить любой сигнал и порог.', aliya:'Артур. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
+  if (!CHATS[id].length){ log.innerHTML = `<div class="bub ai" style="--c:${a.color}">${esc({boss:'Джама. Контролирую команду, провожу планёрки и отвечаю за показатели офиса. Спрашивайте.', nika:'Привет! Я слежу за трендами и новостями. Спросите, что сейчас происходит на рынке.', boris:'Аки. Считаю риски и режу лишнее. Спрашивайте.', timur:'Нод на связи. Могу объяснить любой сигнал и порог.', aliya:'Артур. Исполняю сделки. Спросите про позиции или результат.'}[id])}</div>`; return; }
   log.innerHTML = CHATS[id].map(m=>`<div class="bub ${m.role==='user'?'me':'ai'}${m.err?' err':''}" style="--c:${a.color}">${esc(m.content)}</div>`).join('');
 }
 function sendChat(id, text){

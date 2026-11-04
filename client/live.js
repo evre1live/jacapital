@@ -117,7 +117,9 @@ function onServer(m){
     case 'review': S.review = m.review; emit('review'); break;
     case 'backtest': S.bt = m.bt; if (m.bt.res && m.bt.res.windows) S.btRes = m.bt.res; emit('backtest'); break;
     case 'chat': { const cb = REQ[m.reqId]; if (cb){ delete REQ[m.reqId]; cb(m); } break; }
-    case 'meetStart': emit('meetStart'); break;
+    case 'meetStart': emit('meetStart', m.why); break;
+    case 'boss': S.boss = m.boss; emit('boss'); break;
+    case 'bossVisit': emit('bossVisit', m); break;
     case 'meeting': emit('meeting', m); break;
   }
 }
