@@ -26,6 +26,13 @@ function guard(ex){
   };
   return ex;
 }
+// ccxt запоминает неудачную загрузку рынков и потом возвращает ту же ошибку без нового запроса — сбрасываем, чтобы повтор был настоящим
+function freshMarkets(ex){
+  if (!ex || typeof ex.loadMarkets !== 'function' || ex._fresh) return ex;
+  const lm = ex.loadMarkets.bind(ex); ex._fresh = true;
+  ex.loadMarkets = async (...a) => { try { return await lm(...a); } catch (e){ ex.marketsLoading = undefined; ex.reloadingMarkets = false; throw e; } };
+  return ex;
+}
 export const banLeft = () => Math.max(0, BAN.until - Date.now());
 function banText(){
   return `Binance временно ограничил запросы с IP сервера${BAN.ip ? ' ' + BAN.ip : ''} до ${hhmm(BAN.until)} (по Ташкенту). Исходящий IP на Render общий с другими сервисами — запрет может быть не из-за нас. Офис подключится сам, как только ограничение снимут; позиции на бирже остаются как есть.`;
@@ -36,6 +43,7 @@ export function makeData(CFG) {
   if (CFG.quotes === 'mock') return new MockExchange(CFG);
   const only = CFG.quotes === 'binance' ? {fetchMarkets: CFG.marketType === 'swap' ? ['linear'] : ['spot']} : {};
   const ex = new ccxt[CFG.quotes]({enableRateLimit: true, timeout: 15000, options: {defaultType: CFG.marketType === 'swap' ? 'swap' : 'spot', ...only}});
+  freshMarkets(ex);
   return CFG.quotes === 'binance' ? guard(ex) : ex;
 }
 
@@ -63,6 +71,7 @@ export function makeAccounts(CFG, data) {
       if (b.env === 'demo') ex.enableDemoTrading(true);
       if (b.proxy) ex.httpsProxy = b.proxy;
       if (!b.proxy) guard(ex); // через прокси у счёта свой IP и свой лимит
+      freshMarkets(ex);
     }
     acc.broker = new ExchangeBroker(ex, CFG, {name: 'Binance', live: b.env === 'live', checkKey: b.env === 'live', protect: b.env !== 'mock' && CFG.marketType === 'swap', binance: b.env !== 'mock'});
   }
@@ -73,7 +82,7 @@ export function makeAccounts(CFG, data) {
     const id = CFG.exchange;
     let ex;
     if (id === 'mock') ex = data instanceof MockExchange ? data : new MockExchange(CFG);
-    else { ex = new ccxt.bybit({...opts, apiKey: CFG.apiKey, secret: CFG.apiSecret}); if (CFG.exchangeEnv === 'testnet') ex.setSandboxMode(true); else ex.enableDemoTrading(true); }
+    else { ex = new ccxt.bybit({...opts, apiKey: CFG.apiKey, secret: CFG.apiSecret}); if (CFG.exchangeEnv === 'testnet') ex.setSandboxMode(true); else ex.enableDemoTrading(true); freshMarkets(ex); }
     list.push({id, kind: 'exchange', real: false, label: id === 'mock' ? 'Имитация биржи' : `Bybit — ${CFG.exchangeEnv === 'testnet' ? 'тестовая сеть' : 'демо-счёт'}`, note: market,
       sig: `${id}:${CFG.exchangeEnv}:${CFG.marketType}`, configured: true, ready: false, error: 'Подключаюсь…', maxOrderUsd: CFG.maxOrderUsd,
       broker: new ExchangeBroker(ex, CFG, {name: id === 'mock' ? 'Имитация' : 'Bybit'})});
