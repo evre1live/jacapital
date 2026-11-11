@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
-import {ask, parseJSON, aiEnabled} from './claude.js';
+import {ask, parseJSON, aiEnabled, lastMeta} from './claude.js';
 import {fmtUSD} from './brain.js';
 
 const MIN = 60e3, H = 36e5, DAY = 864e5;
@@ -301,8 +301,15 @@ export class Boss extends EventEmitter {
 - Реплики агентов — от первого лица, по-русски, до 30 слов; вступление Джамы — до 25 слов; итог Джамы — до 45 слов.
 Ответь только JSON:
 {"open":"…","nika":"…","boris":"…","timur":"…","aliya":"…","boss":"…","summary":"2–3 предложения для журнала","decisions":["…"],"tasks":[{"agent":"nika|boris|timur|aliya","task":"…","check":"как проверим"}],"prev_tasks":[{"id":"…","status":"done|partly|not","note":"…"}],"proposals":[{"strategy":"trend|carry|mr|risk","param":"…","value":0,"why":"…"}],"focus":["…"]}`;
-    const txt = await ask({system, prompt: 'Данные офиса:\n' + JSON.stringify(this.pack(why, prev)), maxTokens: 2600, kind: 'meeting'});
-    return parseJSON(txt);
+    let txt = await ask({system, prompt: 'Данные офиса:\n' + JSON.stringify(this.pack(why, prev)), maxTokens: 6000, kind: 'meeting'});
+    try { return parseJSON(txt); }
+    catch (e) {
+      // ответ оборвался или пришёл с пояснениями — просим ту же модель переписать его в строгий JSON
+      console.warn(`[boss] ответ планёрки не разобран: остановка ${lastMeta.stop}, ${txt.length} симв.`);
+      txt = await ask({system: 'Перепиши ответ в строгий JSON без пояснений и без markdown. Схема: {"open":"…","nika":"…","boris":"…","timur":"…","aliya":"…","boss":"…","summary":"…","decisions":["…"],"tasks":[{"agent":"nika|boris|timur|aliya","task":"…","check":"…"}],"prev_tasks":[{"id":"…","status":"done|partly|not","note":"…"}],"proposals":[],"focus":["…"]}. Если ответ оборван — заверши его по смыслу, ничего не выдумывая; незаконченные пункты отбрось.',
+        prompt: txt, maxTokens: 6000, kind: 'meeting'});
+      return parseJSON(txt);
+    }
   }
   ruleMeeting(why, prev){
     const by = a => this.checks.filter(c => c.agent === a), worst = a => by(a).sort((x, y) => LV[y.level] - LV[x.level])[0];
